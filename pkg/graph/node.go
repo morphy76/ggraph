@@ -1,21 +1,13 @@
 package graph
 
 import (
+	"context"
 	"fmt"
+	"time"
 )
 
 // NodeFunc defines a function type that processes a node with the given SharedState type.
 type NodeFunc[T SharedState] func(state T) (T, error)
-
-// CreateStartNode creates a new instance of StartNode with the specified SharedState type.
-func CreateStartNode[T SharedState]() Node[T] {
-	return &StartNode[T]{}
-}
-
-// CreateEndNode creates a new instance of EndNode with the specified SharedState type.
-func CreateEndNode[T SharedState]() Node[T] {
-	return &EndNode[T]{}
-}
 
 // CreateNode creates a new instance of Node with the specified SharedState type.
 func CreateNode[T SharedState](name string, fn NodeFunc[T]) (Node[T], error) {
@@ -25,58 +17,53 @@ func CreateNode[T SharedState](name string, fn NodeFunc[T]) (Node[T], error) {
 	if fn == nil {
 		return nil, fmt.Errorf("node creation failed: function cannot be nil")
 	}
-	return &nodeImpl[T]{name: name, fn: fn}, nil
+	return &nodeImpl[T]{
+		mailbox: make(chan T),
+
+		name: name,
+		fn:   fn,
+	}, nil
 }
 
 // Node represents a node in the graph.
 type Node[T SharedState] interface {
 	// Accept processes the node with the given state and returns the updated state.
-	Accept(state T, runtime Runtime[T]) (T, error)
-}
-
-var _ Node[SharedState] = (*StartNode[SharedState])(nil)
-
-// StartNode represents the starting node of a graph.
-type StartNode[T SharedState] struct {
-}
-
-func (n *StartNode[T]) Accept(state T, runtime Runtime[T]) (T, error) {
-	outboundEdges := runtime.EdgesFrom(n)
-	if len(outboundEdges) == 0 {
-		return state, fmt.Errorf("error browsing the graph from start node")
-	}
-
-	selectedEdge := outboundEdges[0]
-	return selectedEdge.To().Accept(state, runtime)
-}
-
-var _ Node[SharedState] = (*EndNode[SharedState])(nil)
-
-// EndNode represents the ending node of a graph.
-type EndNode[T SharedState] struct {
-}
-
-func (n *EndNode[T]) Accept(state T, runtime Runtime[T]) (T, error) {
-	return state, nil
+	Accept(state T, runtime StateObserver[T])
+	// Name returns the name of the node.
+	Name() string
 }
 
 var _ Node[SharedState] = (*nodeImpl[SharedState])(nil)
 
 type nodeImpl[T SharedState] struct {
+	mailbox chan T
+
 	name string
 	fn   NodeFunc[T]
 }
 
-func (n *nodeImpl[T]) Accept(state T, runtime Runtime[T]) (T, error) {
-	nextState, err := n.fn(state)
-	if err != nil {
-		return nextState, fmt.Errorf("error processing node '%s': %w", n.name, err)
-	}
+func (n *nodeImpl[T]) Name() string {
+	return n.name
+}
 
-	outboundEdges := runtime.EdgesFrom(n)
-	if len(outboundEdges) == 0 {
-		return nextState, fmt.Errorf("error browsing the graph from node '%s'", n.name)
-	}
+func (n *nodeImpl[T]) Accept(state T, runtime StateObserver[T]) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
-	return outboundEdges[0].To().Accept(nextState, runtime)
+		select {
+		case state := <-n.mailbox:
+			updatedState, err := n.fn(state)
+			if err != nil {
+				runtime.NotifyStateChange(n, updatedState, fmt.Errorf("error executing node %s: %w", n.name, err))
+				return
+			}
+			runtime.NotifyStateChange(n, updatedState, nil)
+		case <-ctx.Done():
+			runtime.NotifyStateChange(n, state, fmt.Errorf("timeout executing node %s: %w", n.name, ctx.Err()))
+			return
+		}
+	}()
+
+	n.mailbox <- state
 }

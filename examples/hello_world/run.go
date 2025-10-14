@@ -35,7 +35,9 @@ func main() {
 	midEdge := graph.CreateEdge(helloNode, goodbyeNode)
 	endEdge := graph.CreateEndEdge(goodbyeNode)
 
-	graph := graph.CreateRuntime(startEdge)
+	initialState := MyState{Message: ""}
+	stateMonitorCh := make(chan graph.StateMonitorEntry[MyState], 10)
+	graph := graph.CreateRuntime(startEdge, initialState, stateMonitorCh)
 	graph.AddEdge(midEdge)
 	graph.AddEdge(endEdge)
 
@@ -44,12 +46,14 @@ func main() {
 		log.Fatalf("Graph validation failed: %v", err)
 	}
 
-	// Invoke the runtime with an initial state
-	initialState := MyState{Message: "Bob"}
-	finalState, err := graph.Invoke(initialState)
-	if err != nil {
-		log.Fatalf("Runtime invocation failed: %v", err)
-	}
+	newState := MyState{Message: "Bob"}
+	graph.Invoke(newState)
 
-	log.Printf("Final State: %+v", finalState)
+	for {
+		entry := <-stateMonitorCh
+		fmt.Printf("State Monitor Entry: %+v\n", entry)
+		if !entry.Running {
+			break
+		}
+	}
 }

@@ -1,51 +1,70 @@
 package graph
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 // CreateRuntime creates a new instance of Runtime with the specified SharedState type.
-func CreateRuntime[T SharedState](startEdge *StartEdge[T]) Runtime[T] {
+func CreateRuntime[T SharedState](startEdge *StartEdge[T], initialState T, stateMonitorCh chan StateMonitorEntry[T]) Runtime[T] {
+	ctx, cancelFn := context.WithCancel(context.Background())
 	return &runtimeImpl[T]{
+		ctx:    ctx,
+		cancel: cancelFn,
+
+		outcomeCh:      make(chan nodeFnReturnStruct[T]),
+		stateMonitorCh: stateMonitorCh,
+
 		startEdge: *startEdge,
 		edges:     []Edge[T]{},
+
+		state: initialState,
 	}
 }
 
 // Connected provides access to the connected graph components.
 type Connected[T SharedState] interface {
 	// AddEdge adds an edge to the runtime's graph.
-	AddEdge(edge Edge[T]) error
+	AddEdge(edge Edge[T])
 	// Validate checks the integrity of the graph structure.
 	Validate() error
-	// EdgesFrom returns all edges originating from the given node.
-	EdgesFrom(node Node[T]) []Edge[T]
 }
 
 // Runtime represents the runtime environment for graph processing.
 type Runtime[T SharedState] interface {
 	Connected[T]
 	// Invoke executes the graph processing with the given entry state.
-	Invoke(entryState T) (T, error)
+	Invoke(entryState T)
 }
 
 var _ Runtime[SharedState] = (*runtimeImpl[SharedState])(nil)
 
+type nodeFnReturnStruct[T SharedState] struct {
+	node  Node[T]
+	state T
+	err   error
+}
+
 type runtimeImpl[T SharedState] struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	outcomeCh      chan nodeFnReturnStruct[T]
+	stateMonitorCh chan StateMonitorEntry[T]
+
 	startEdge StartEdge[T]
 	edges     []Edge[T]
+
+	state T
 }
 
-func (r *runtimeImpl[T]) Invoke(entryState T) (T, error) {
-	rv, err := r.startEdge.from.Accept(entryState, r)
-	if err != nil {
-		return rv, fmt.Errorf("error invoking start edge: %w", err)
-	}
-
-	return rv, nil
+func (r *runtimeImpl[T]) Invoke(entryState T) {
+	r.start()
+	r.startEdge.from.Accept(entryState, r)
 }
 
-func (r *runtimeImpl[T]) AddEdge(edge Edge[T]) error {
+func (r *runtimeImpl[T]) AddEdge(edge Edge[T]) {
 	r.edges = append(r.edges, edge)
-	return nil
 }
 
 func (r *runtimeImpl[T]) Validate() error {
@@ -68,7 +87,63 @@ func (r *runtimeImpl[T]) Validate() error {
 	return nil
 }
 
-func (r *runtimeImpl[T]) EdgesFrom(node Node[T]) []Edge[T] {
+func (r *runtimeImpl[T]) NotifyStateChange(node Node[T], state T, err error) {
+	r.outcomeCh <- nodeFnReturnStruct[T]{node: node, state: state, err: err}
+}
+
+func (r *runtimeImpl[T]) start() {
+	go r.onStatusChange()
+}
+
+func (r *runtimeImpl[T]) stop() {
+	r.cancel()
+
+	if r.stateMonitorCh != nil {
+		r.stateMonitorCh <- GraphCompleted(r.state)
+	}
+}
+
+func (r *runtimeImpl[T]) onStatusChange() {
+	for {
+		select {
+		case <-r.ctx.Done():
+			r.stop()
+			return
+		case result := <-r.outcomeCh:
+			if result.err != nil {
+				if r.stateMonitorCh != nil {
+					r.stateMonitorCh <- GraphError(result.node.Name(), r.state, result.err)
+				}
+				r.stop()
+				return
+			}
+
+			if r.stateMonitorCh != nil {
+				r.stateMonitorCh <- GraphRunning(result.node.Name(), r.state, result.state)
+			}
+			// TODO merge
+			r.state = result.state
+
+			outboundEdges := r.edgesFrom(result.node)
+			if len(outboundEdges) == 0 {
+				r.stop()
+				return
+			}
+
+			for _, edge := range outboundEdges {
+				nextNode := edge.To()
+				if nextNode == nil {
+					r.stop()
+					return
+				}
+
+				nextNode.Accept(r.state, r)
+			}
+		}
+	}
+}
+
+func (r *runtimeImpl[T]) edgesFrom(node Node[T]) []Edge[T] {
 	if r.startEdge.from == node {
 		return []Edge[T]{&r.startEdge}
 	}
