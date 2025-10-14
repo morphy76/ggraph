@@ -66,6 +66,8 @@ type Runtime[T SharedState] interface {
 	Connected[T]
 	// Invoke executes the graph processing with the given entry state.
 	Invoke(entryState T)
+	// TODO invoke with context
+	// InvokeWithContext(ctx context.Context, entryState T)
 	// Shutdown gracefully stops the runtime processing.
 	Shutdown()
 }
