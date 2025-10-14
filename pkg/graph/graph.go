@@ -8,13 +8,17 @@ type StateObserver[T SharedState] interface {
 
 // CreateStartNode creates a new instance of StartNode with the specified SharedState type.
 func CreateStartNode[T SharedState]() Node[T] {
-	return &StartNode[T]{}
+	policy, _ := CreateAnyRoutePolicy[T]()
+	return &StartNode[T]{
+		policy: policy,
+	}
 }
 
 var _ Node[SharedState] = (*StartNode[SharedState])(nil)
 
 // StartNode represents the starting node of a graph.
 type StartNode[T SharedState] struct {
+	policy RoutePolicy[T]
 }
 
 func (n *StartNode[T]) Name() string {
@@ -23,6 +27,10 @@ func (n *StartNode[T]) Name() string {
 
 func (n *StartNode[T]) Accept(state T, runtime StateObserver[T]) {
 	go runtime.NotifyStateChange(n, state, nil)
+}
+
+func (n *StartNode[T]) RoutePolicy() RoutePolicy[T] {
+	return n.policy
 }
 
 // CreateEndNode creates a new instance of EndNode with the specified SharedState type.
@@ -34,6 +42,7 @@ var _ Node[SharedState] = (*EndNode[SharedState])(nil)
 
 // EndNode represents the ending node of a graph.
 type EndNode[T SharedState] struct {
+	policy RoutePolicy[T]
 }
 
 func (n *EndNode[T]) Name() string {
@@ -44,9 +53,13 @@ func (n *EndNode[T]) Accept(state T, runtime StateObserver[T]) {
 	go runtime.NotifyStateChange(n, state, nil)
 }
 
+func (n *EndNode[T]) RoutePolicy() RoutePolicy[T] {
+	return nil
+}
+
 // CreateStartEdge creates a new instance of StartEdge with the specified SharedState type.
 func CreateStartEdge[T SharedState](to Node[T]) *StartEdge[T] {
-	return &StartEdge[T]{edgeImpl: edgeImpl[T]{from: CreateStartNode[T](), to: to}}
+	return &StartEdge[T]{edgeImpl: edgeImpl[T]{from: CreateStartNode[T](), to: to, labels: map[string]string{"type": "start"}}}
 }
 
 var _ Edge[SharedState] = (*StartEdge[SharedState])(nil)
@@ -62,7 +75,7 @@ func (e *StartEdge[T]) To() Node[T] {
 
 // CreateEndEdge creates a new instance of EndEdge with the specified SharedState type.
 func CreateEndEdge[T SharedState](from Node[T]) *EndEdge[T] {
-	return &EndEdge[T]{edgeImpl: edgeImpl[T]{from: from, to: CreateEndNode[T]()}}
+	return &EndEdge[T]{edgeImpl: edgeImpl[T]{from: from, to: CreateEndNode[T](), labels: map[string]string{"type": "end"}}}
 }
 
 var _ Edge[SharedState] = (*EndEdge[SharedState])(nil)

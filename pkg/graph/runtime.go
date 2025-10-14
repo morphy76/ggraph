@@ -9,10 +9,32 @@ import (
 // CreateRuntime creates a new instance of Runtime with the specified SharedState type.
 func CreateRuntime[T SharedState](
 	startEdge *StartEdge[T],
-	initialState T,
-	merger StateMergeFn[T],
 	stateMonitorCh chan StateMonitorEntry[T],
-) Runtime[T] {
+) (Runtime[T], error) {
+	return CreateRuntimeWithMerger(startEdge, stateMonitorCh, nil)
+}
+
+// CreateRuntimeWithMerger creates a new instance of Runtime with the specified SharedState type and state merger function.
+func CreateRuntimeWithMerger[T SharedState](
+	startEdge *StartEdge[T],
+	stateMonitorCh chan StateMonitorEntry[T],
+	merger StateMergeFn[T],
+) (Runtime[T], error) {
+	var zero T
+	return CreateRuntimeWithMergerAndInitialState(startEdge, stateMonitorCh, merger, zero)
+}
+
+// CreateRuntimeWithMergerAndInitialState creates a new instance of Runtime with the specified SharedState type, state merger function, and initial state.
+func CreateRuntimeWithMergerAndInitialState[T SharedState](
+	startEdge *StartEdge[T],
+	stateMonitorCh chan StateMonitorEntry[T],
+	merger StateMergeFn[T],
+	initialState T,
+) (Runtime[T], error) {
+	// TODO context should be per invoke request and not global in the runtime to avoid race conditions
+	if startEdge == nil {
+		return nil, fmt.Errorf("runtime creation failed: start edge cannot be nil")
+	}
 	ctx, cancelFn := context.WithCancel(context.Background())
 	return &runtimeImpl[T]{
 		ctx:    ctx,
@@ -27,7 +49,7 @@ func CreateRuntime[T SharedState](
 		state:  initialState,
 		merger: merger,
 		lock:   &sync.RWMutex{},
-	}
+	}, nil
 }
 
 // Connected provides access to the connected graph components.
@@ -78,10 +100,6 @@ func (r *runtimeImpl[T]) AddEdge(edge ...Edge[T]) {
 }
 
 func (r *runtimeImpl[T]) Validate() error {
-	var zeroStartEdge StartEdge[T]
-	if r.startEdge == zeroStartEdge {
-		return fmt.Errorf("graph validation failed: start edge is nil")
-	}
 	if r.startEdge.from == nil {
 		return fmt.Errorf("graph validation failed: start edge 'from' node is nil")
 	}
@@ -140,16 +158,26 @@ func (r *runtimeImpl[T]) onStatusChange() {
 				return
 			}
 
-			// TODO routing
-			for _, edge := range outboundEdges {
-				nextNode := edge.To()
-				if nextNode == nil {
-					r.stop()
-					return
-				}
-
-				nextNode.Accept(r.state, r)
+			policy := result.node.RoutePolicy()
+			if policy == nil {
+				r.stop()
+				return
 			}
+
+			nextEdge := policy.SelectEdge(r.state, outboundEdges)
+
+			if nextEdge == nil {
+				r.stop()
+				return
+			}
+
+			nextNode := nextEdge.To()
+			if nextNode == nil {
+				r.stop()
+				return
+			}
+
+			nextNode.Accept(r.state, r)
 		}
 	}
 }
@@ -157,7 +185,12 @@ func (r *runtimeImpl[T]) onStatusChange() {
 func (r *runtimeImpl[T]) merge(current, other T) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
-	r.state = r.merger(current, other)
+
+	if r.merger == nil || any(current) == nil {
+		r.state = other
+	} else {
+		r.state = r.merger(current, other)
+	}
 }
 
 func (r *runtimeImpl[T]) edgesFrom(node Node[T]) []Edge[T] {
