@@ -30,7 +30,7 @@ func main() {
 	routerNode, err := graph.CreateRouter("operation_routing", routingPolicy)
 
 	adder, err := graph.CreateNode("Adder", func(state MyState) (MyState, error) {
-		state.Result = state.num1 + state.num2
+		state.Result = state.Result + state.num2
 		return state, nil
 	})
 	if err != nil {
@@ -38,7 +38,7 @@ func main() {
 	}
 
 	subtractor, err := graph.CreateNode("Subtractor", func(state MyState) (MyState, error) {
-		state.Result = state.num1 - state.num2
+		state.Result = state.Result - state.num2
 		return state, nil
 	})
 	if err != nil {
@@ -46,43 +46,39 @@ func main() {
 	}
 
 	startEdge := graph.CreateStartEdge(routerNode)
+	stateMonitorCh := make(chan graph.StateMonitorEntry[MyState], 10)
+	myGraph, err := graph.CreateRuntime(startEdge, stateMonitorCh)
+	if err != nil {
+		log.Fatalf("Runtime creation failed: %v", err)
+	}
+	defer myGraph.Shutdown()
+
 	additionEdge := graph.CreateEdge(routerNode, adder, map[string]string{"operation": "+"})
 	subtractionEdge := graph.CreateEdge(routerNode, subtractor, map[string]string{"operation": "-"})
 	additionEndEdge := graph.CreateEndEdge(adder)
 	subtractionEndEdge := graph.CreateEndEdge(subtractor)
+	myGraph.AddEdge(additionEdge, subtractionEdge, additionEndEdge, subtractionEndEdge)
 
-	stateMonitorCh := make(chan graph.StateMonitorEntry[MyState], 10)
-	graph, err := graph.CreateRuntime(startEdge, stateMonitorCh)
-	if err != nil {
-		log.Fatalf("Runtime creation failed: %v", err)
-	}
-	defer graph.Shutdown()
-	graph.AddEdge(additionEdge, subtractionEdge, additionEndEdge, subtractionEndEdge)
-
-	err = graph.Validate()
+	err = myGraph.Validate()
 	if err != nil {
 		log.Fatalf("Graph validation failed: %v", err)
 	}
 
-	newState := MyState{num1: 10, op: "-", num2: 5}
-	graph.Invoke(newState)
+	newState := MyState{op: "-", num2: 5}
+	myGraph.Invoke(newState)
 
+	newState = MyState{op: "+", num2: 5}
+	myGraph.Invoke(newState)
+
+	breakLoop := 2
 	for {
 		entry := <-stateMonitorCh
-		fmt.Printf("State Monitor Entry: %+v\n", entry)
+		fmt.Printf("State Monitor Node: %s Entry: %+v Error: %v\n", entry.Node, entry.CurrentState, entry.Error)
 		if !entry.Running {
-			break
-		}
-	}
-
-	newState = MyState{num1: 10, op: "+", num2: 5}
-	graph.Invoke(newState)
-
-	for {
-		entry := <-stateMonitorCh
-		fmt.Printf("State Monitor Entry: %+v\n", entry)
-		if !entry.Running {
-			break
+			breakLoop--
+			if breakLoop == 0 {
+				break
+			}
 		}
 	}
 }
