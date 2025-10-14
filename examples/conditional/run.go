@@ -29,7 +29,7 @@ func main() {
 	})
 	routerNode, err := graph.CreateRouter("operation_routing", routingPolicy)
 
-	adder, err := graph.CreateNode("Adder", func(state MyState) (MyState, error) {
+	adder, err := graph.CreateNode("Adder", func(state MyState, notify func(MyState)) (MyState, error) {
 		state.Result = state.Result + state.num2
 		return state, nil
 	})
@@ -37,7 +37,7 @@ func main() {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
-	subtractor, err := graph.CreateNode("Subtractor", func(state MyState) (MyState, error) {
+	subtractor, err := graph.CreateNode("Subtractor", func(state MyState, notify func(MyState)) (MyState, error) {
 		state.Result = state.Result - state.num2
 		return state, nil
 	})

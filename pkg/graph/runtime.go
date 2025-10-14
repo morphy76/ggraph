@@ -76,9 +76,10 @@ type Runtime[T SharedState] interface {
 var _ Runtime[SharedState] = (*runtimeImpl[SharedState])(nil)
 
 type nodeFnReturnStruct[T SharedState] struct {
-	node  Node[T]
-	state T
-	err   error
+	node    Node[T]
+	state   T
+	err     error
+	partial bool
 }
 
 type runtimeImpl[T SharedState] struct {
@@ -124,8 +125,8 @@ func (r *runtimeImpl[T]) Shutdown() {
 	r.cancel()
 }
 
-func (r *runtimeImpl[T]) NotifyStateChange(node Node[T], state T, err error) {
-	r.outcomeCh <- nodeFnReturnStruct[T]{node: node, state: state, err: err}
+func (r *runtimeImpl[T]) NotifyStateChange(node Node[T], state T, err error, partial bool) {
+	r.outcomeCh <- nodeFnReturnStruct[T]{node: node, state: state, err: err, partial: partial}
 }
 
 func (r *runtimeImpl[T]) start() {
@@ -141,6 +142,13 @@ func (r *runtimeImpl[T]) onStatusChange() {
 			if result.err != nil {
 				if r.stateMonitorCh != nil {
 					r.stateMonitorCh <- GraphError(result.node.Name(), r.state, result.err)
+				}
+				continue
+			}
+
+			if result.partial {
+				if r.stateMonitorCh != nil {
+					r.stateMonitorCh <- GraphPartial(result.node.Name(), result.state)
 				}
 				continue
 			}

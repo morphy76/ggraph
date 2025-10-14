@@ -3,7 +3,7 @@ package graph
 // StateObserver is an interface for observing state changes in nodes during graph processing.
 type StateObserver[T SharedState] interface {
 	// NotifyStateChange is called when a node changes state during processing.
-	NotifyStateChange(node Node[T], state T, err error)
+	NotifyStateChange(node Node[T], state T, err error, partial bool)
 }
 
 // CreateStartNode creates a new instance of StartNode with the specified SharedState type.
@@ -26,7 +26,7 @@ func (n *StartNode[T]) Name() string {
 }
 
 func (n *StartNode[T]) Accept(state T, runtime StateObserver[T]) {
-	go runtime.NotifyStateChange(n, state, nil)
+	go runtime.NotifyStateChange(n, state, nil, false)
 }
 
 func (n *StartNode[T]) RoutePolicy() RoutePolicy[T] {
@@ -50,7 +50,7 @@ func (n *EndNode[T]) Name() string {
 }
 
 func (n *EndNode[T]) Accept(state T, runtime StateObserver[T]) {
-	go runtime.NotifyStateChange(n, state, nil)
+	go runtime.NotifyStateChange(n, state, nil, false)
 }
 
 func (n *EndNode[T]) RoutePolicy() RoutePolicy[T] {

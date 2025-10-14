@@ -22,7 +22,7 @@ func merge(originalState, newState MyState) MyState {
 
 func main() {
 
-	helloNode, err := graph.CreateNode("HelloNode", func(state MyState) (MyState, error) {
+	helloNode, err := graph.CreateNode("HelloNode", func(state MyState, notify func(MyState)) (MyState, error) {
 		state.Message = fmt.Sprintf("Hello %s!!!", state.Message)
 		return state, nil
 	})
@@ -30,7 +30,7 @@ func main() {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
-	goodbyeNode, err := graph.CreateNode("GoodbyeNode", func(state MyState) (MyState, error) {
+	goodbyeNode, err := graph.CreateNode("GoodbyeNode", func(state MyState, notify func(MyState)) (MyState, error) {
 		state.Message = fmt.Sprintf("Goodbye %s!!!", state.Message)
 		return state, nil
 	})

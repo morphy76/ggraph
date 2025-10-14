@@ -45,7 +45,7 @@ func merge(original, new GameState) GameState {
 
 func main() {
 	// Node 1: Determine target number
-	initNode, _ := graph.CreateNode("InitNode", func(state GameState) (GameState, error) {
+	initNode, _ := graph.CreateNode("InitNode", func(state GameState, notify func(GameState)) (GameState, error) {
 		state.Target = rand.Intn(100) + 1
 		state.Tries = 0
 		state.Low = 1
@@ -55,7 +55,7 @@ func main() {
 	})
 
 	// Node 2: Make a guess using binary search
-	guessNode, _ := graph.CreateNode("GuessNode", func(state GameState) (GameState, error) {
+	guessNode, _ := graph.CreateNode("GuessNode", func(state GameState, notify func(GameState)) (GameState, error) {
 		state.Tries++
 		state.Guess = (state.Low + state.High) / 2
 		state.Success = (state.Guess == state.Target)
@@ -64,7 +64,7 @@ func main() {
 	})
 
 	// Node 3: Provide hint and adjust range
-	hintNode, _ := graph.CreateNode("HintNode", func(state GameState) (GameState, error) {
+	hintNode, _ := graph.CreateNode("HintNode", func(state GameState, notify func(GameState)) (GameState, error) {
 		if state.Guess < state.Target {
 			state.Low = state.Guess + 1
 			state.Hint = "higher"
@@ -95,7 +95,7 @@ func main() {
 	router, _ := graph.CreateRouter("CheckRouter", routingPolicy)
 
 	// End node for success
-	endNode, _ := graph.CreateNode("EndNode", func(state GameState) (GameState, error) {
+	endNode, _ := graph.CreateNode("EndNode", func(state GameState, notify func(GameState)) (GameState, error) {
 		fmt.Printf("🎉 Correct! The answer was %d\n", state.Target)
 		return state, nil
 	})

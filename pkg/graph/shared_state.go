@@ -14,6 +14,7 @@ func GraphRunning[T SharedState](node string, previousState, currentState T) Sta
 		PreviousState: previousState,
 		CurrentState:  currentState,
 		Running:       true,
+		Partial:       false,
 	}
 }
 
@@ -25,6 +26,17 @@ func GraphError[T SharedState](node string, currentState T, err error) StateMoni
 		CurrentState:  currentState,
 		Error:         err,
 		Running:       false,
+		Partial:       false,
+	}
+}
+
+func GraphPartial[T SharedState](node string, currentState T) StateMonitorEntry[T] {
+	return StateMonitorEntry[T]{
+		Node:          node,
+		PreviousState: currentState,
+		CurrentState:  currentState,
+		Running:       true,
+		Partial:       true,
 	}
 }
 
@@ -33,6 +45,7 @@ func GraphCompleted[T SharedState](finalState T) StateMonitorEntry[T] {
 	return StateMonitorEntry[T]{
 		CurrentState: finalState,
 		Running:      false,
+		Partial:      false,
 	}
 }
 
@@ -43,4 +56,5 @@ type StateMonitorEntry[T SharedState] struct {
 	CurrentState  T
 	Error         error
 	Running       bool
+	Partial       bool
 }
