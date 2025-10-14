@@ -31,12 +31,11 @@ func CreateRuntimeWithMergerAndInitialState[T SharedState](
 	merger StateMergeFn[T],
 	initialState T,
 ) (Runtime[T], error) {
-	// TODO context should be per invoke request and not global in the runtime to avoid race conditions
 	if startEdge == nil {
 		return nil, fmt.Errorf("runtime creation failed: start edge cannot be nil")
 	}
 	ctx, cancelFn := context.WithCancel(context.Background())
-	return &runtimeImpl[T]{
+	rv := &runtimeImpl[T]{
 		ctx:    ctx,
 		cancel: cancelFn,
 
@@ -49,7 +48,9 @@ func CreateRuntimeWithMergerAndInitialState[T SharedState](
 		state:  initialState,
 		merger: merger,
 		lock:   &sync.RWMutex{},
-	}, nil
+	}
+	rv.start()
+	return rv, nil
 }
 
 // Connected provides access to the connected graph components.
@@ -65,6 +66,8 @@ type Runtime[T SharedState] interface {
 	Connected[T]
 	// Invoke executes the graph processing with the given entry state.
 	Invoke(entryState T)
+	// Shutdown gracefully stops the runtime processing.
+	Shutdown()
 }
 
 var _ Runtime[SharedState] = (*runtimeImpl[SharedState])(nil)
@@ -91,7 +94,6 @@ type runtimeImpl[T SharedState] struct {
 }
 
 func (r *runtimeImpl[T]) Invoke(entryState T) {
-	r.start()
 	r.startEdge.from.Accept(entryState, r)
 }
 
@@ -115,6 +117,10 @@ func (r *runtimeImpl[T]) Validate() error {
 	return nil
 }
 
+func (r *runtimeImpl[T]) Shutdown() {
+	r.cancel()
+}
+
 func (r *runtimeImpl[T]) NotifyStateChange(node Node[T], state T, err error) {
 	r.outcomeCh <- nodeFnReturnStruct[T]{node: node, state: state, err: err}
 }
@@ -123,58 +129,54 @@ func (r *runtimeImpl[T]) start() {
 	go r.onStatusChange()
 }
 
-func (r *runtimeImpl[T]) stop() {
-	r.cancel()
-
-	if r.stateMonitorCh != nil {
-		r.stateMonitorCh <- GraphCompleted(r.state)
-	}
-}
-
 func (r *runtimeImpl[T]) onStatusChange() {
 	for {
 		select {
 		case <-r.ctx.Done():
-			r.stop()
 			return
 		case result := <-r.outcomeCh:
 			if result.err != nil {
 				if r.stateMonitorCh != nil {
 					r.stateMonitorCh <- GraphError(result.node.Name(), r.state, result.err)
 				}
-				r.stop()
-				return
+				continue
 			}
 
+			previous := r.merge(r.state, result.state)
 			if r.stateMonitorCh != nil {
-				r.stateMonitorCh <- GraphRunning(result.node.Name(), r.state, result.state)
+				r.stateMonitorCh <- GraphRunning(result.node.Name(), previous, r.state)
 			}
 
-			r.merge(r.state, result.state)
+			_, isEndNode := result.node.(*EndNode[T])
+			if isEndNode {
+				if r.stateMonitorCh != nil {
+					r.stateMonitorCh <- GraphCompleted(r.state)
+				}
+				continue
+			}
 
 			outboundEdges := r.edgesFrom(result.node)
 			if len(outboundEdges) == 0 {
-				r.stop()
-				return
+				r.stateMonitorCh <- GraphError(result.node.Name(), r.state, fmt.Errorf("no outbound edges from node %s", result.node.Name()))
+				continue
 			}
 
 			policy := result.node.RoutePolicy()
 			if policy == nil {
-				r.stop()
-				return
+				r.stateMonitorCh <- GraphError(result.node.Name(), r.state, fmt.Errorf("node %s has no routing policy", result.node.Name()))
+				continue
 			}
 
 			nextEdge := policy.SelectEdge(r.state, outboundEdges)
-
 			if nextEdge == nil {
-				r.stop()
-				return
+				r.stateMonitorCh <- GraphError(result.node.Name(), r.state, fmt.Errorf("routing policy for node %s returned nil edge", result.node.Name()))
+				continue
 			}
 
 			nextNode := nextEdge.To()
 			if nextNode == nil {
-				r.stop()
-				return
+				r.stateMonitorCh <- GraphError(result.node.Name(), r.state, fmt.Errorf("next edge from node %s has nil target node", result.node.Name()))
+				continue
 			}
 
 			nextNode.Accept(r.state, r)
@@ -182,15 +184,19 @@ func (r *runtimeImpl[T]) onStatusChange() {
 	}
 }
 
-func (r *runtimeImpl[T]) merge(current, other T) {
+func (r *runtimeImpl[T]) merge(current, other T) T {
 	r.lock.Lock()
 	defer r.lock.Unlock()
+
+	previous := r.state
 
 	if r.merger == nil || any(current) == nil {
 		r.state = other
 	} else {
 		r.state = r.merger(current, other)
 	}
+
+	return previous
 }
 
 func (r *runtimeImpl[T]) edgesFrom(node Node[T]) []Edge[T] {

@@ -48,6 +48,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Runtime creation failed: %v", err)
 	}
+	defer graph.Shutdown()
 	graph.AddEdge(midEdge, endEdge)
 
 	err = graph.Validate()
