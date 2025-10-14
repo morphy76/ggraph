@@ -3,6 +3,7 @@ package graph
 import (
 	"context"
 	"fmt"
+	"sync"
 )
 
 // CreateRuntime creates a new instance of Runtime with the specified SharedState type.
@@ -25,6 +26,7 @@ func CreateRuntime[T SharedState](
 
 		state:  initialState,
 		merger: merger,
+		lock:   &sync.RWMutex{},
 	}
 }
 
@@ -63,6 +65,7 @@ type runtimeImpl[T SharedState] struct {
 
 	state  T
 	merger StateMergeFn[T]
+	lock   *sync.RWMutex
 }
 
 func (r *runtimeImpl[T]) Invoke(entryState T) {
@@ -129,7 +132,7 @@ func (r *runtimeImpl[T]) onStatusChange() {
 				r.stateMonitorCh <- GraphRunning(result.node.Name(), r.state, result.state)
 			}
 
-			r.state = r.merger(r.state, result.state)
+			r.merge(r.state, result.state)
 
 			outboundEdges := r.edgesFrom(result.node)
 			if len(outboundEdges) == 0 {
@@ -137,6 +140,7 @@ func (r *runtimeImpl[T]) onStatusChange() {
 				return
 			}
 
+			// TODO routing
 			for _, edge := range outboundEdges {
 				nextNode := edge.To()
 				if nextNode == nil {
@@ -148,6 +152,12 @@ func (r *runtimeImpl[T]) onStatusChange() {
 			}
 		}
 	}
+}
+
+func (r *runtimeImpl[T]) merge(current, other T) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.state = r.merger(current, other)
 }
 
 func (r *runtimeImpl[T]) edgesFrom(node Node[T]) []Edge[T] {
