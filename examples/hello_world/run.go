@@ -13,6 +13,13 @@ type MyState struct {
 	Message string
 }
 
+func merge(originalState, newState MyState) MyState {
+	if newState.Message != "" {
+		originalState.Message = newState.Message
+	}
+	return originalState
+}
+
 func main() {
 
 	helloNode, err := graph.CreateNode("HelloNode", func(state MyState) (MyState, error) {
@@ -37,7 +44,7 @@ func main() {
 
 	initialState := MyState{Message: ""}
 	stateMonitorCh := make(chan graph.StateMonitorEntry[MyState], 10)
-	graph := graph.CreateRuntime(startEdge, initialState, stateMonitorCh)
+	graph := graph.CreateRuntime(startEdge, initialState, merge, stateMonitorCh)
 	graph.AddEdge(midEdge)
 	graph.AddEdge(endEdge)
 

@@ -1,5 +1,8 @@
 package graph
 
+// StateMergeFn defines a function type for merging two SharedState instances.
+type StateMergeFn[T SharedState] func(current, other T) T
+
 // SharedState is an interface for shared state management in graph processing.
 type SharedState interface {
 }

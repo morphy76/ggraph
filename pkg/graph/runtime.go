@@ -6,7 +6,12 @@ import (
 )
 
 // CreateRuntime creates a new instance of Runtime with the specified SharedState type.
-func CreateRuntime[T SharedState](startEdge *StartEdge[T], initialState T, stateMonitorCh chan StateMonitorEntry[T]) Runtime[T] {
+func CreateRuntime[T SharedState](
+	startEdge *StartEdge[T],
+	initialState T,
+	merger StateMergeFn[T],
+	stateMonitorCh chan StateMonitorEntry[T],
+) Runtime[T] {
 	ctx, cancelFn := context.WithCancel(context.Background())
 	return &runtimeImpl[T]{
 		ctx:    ctx,
@@ -18,7 +23,8 @@ func CreateRuntime[T SharedState](startEdge *StartEdge[T], initialState T, state
 		startEdge: *startEdge,
 		edges:     []Edge[T]{},
 
-		state: initialState,
+		state:  initialState,
+		merger: merger,
 	}
 }
 
@@ -55,7 +61,8 @@ type runtimeImpl[T SharedState] struct {
 	startEdge StartEdge[T]
 	edges     []Edge[T]
 
-	state T
+	state  T
+	merger StateMergeFn[T]
 }
 
 func (r *runtimeImpl[T]) Invoke(entryState T) {
@@ -121,8 +128,8 @@ func (r *runtimeImpl[T]) onStatusChange() {
 			if r.stateMonitorCh != nil {
 				r.stateMonitorCh <- GraphRunning(result.node.Name(), r.state, result.state)
 			}
-			// TODO merge
-			r.state = result.state
+
+			r.state = r.merger(r.state, result.state)
 
 			outboundEdges := r.edgesFrom(result.node)
 			if len(outboundEdges) == 0 {
