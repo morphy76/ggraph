@@ -45,8 +45,7 @@ func main() {
 	initialState := MyState{Message: ""}
 	stateMonitorCh := make(chan graph.StateMonitorEntry[MyState], 10)
 	graph := graph.CreateRuntime(startEdge, initialState, merge, stateMonitorCh)
-	graph.AddEdge(midEdge)
-	graph.AddEdge(endEdge)
+	graph.AddEdge(midEdge, endEdge)
 
 	err = graph.Validate()
 	if err != nil {

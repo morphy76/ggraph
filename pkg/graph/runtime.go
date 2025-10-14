@@ -31,7 +31,7 @@ func CreateRuntime[T SharedState](
 // Connected provides access to the connected graph components.
 type Connected[T SharedState] interface {
 	// AddEdge adds an edge to the runtime's graph.
-	AddEdge(edge Edge[T])
+	AddEdge(edge ...Edge[T])
 	// Validate checks the integrity of the graph structure.
 	Validate() error
 }
@@ -70,8 +70,8 @@ func (r *runtimeImpl[T]) Invoke(entryState T) {
 	r.startEdge.from.Accept(entryState, r)
 }
 
-func (r *runtimeImpl[T]) AddEdge(edge Edge[T]) {
-	r.edges = append(r.edges, edge)
+func (r *runtimeImpl[T]) AddEdge(edge ...Edge[T]) {
+	r.edges = append(r.edges, edge...)
 }
 
 func (r *runtimeImpl[T]) Validate() error {

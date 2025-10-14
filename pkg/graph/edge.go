@@ -5,6 +5,8 @@ func CreateEdge[T SharedState](from, to Node[T]) Edge[T] {
 	return &edgeImpl[T]{from: from, to: to}
 }
 
+// TODO predicates
+
 // Edge represents an edge in the graph.
 type Edge[T SharedState] interface {
 	To() Node[T]
