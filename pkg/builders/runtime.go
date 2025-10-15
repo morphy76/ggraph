@@ -7,7 +7,7 @@ import (
 
 // CreateRuntime creates a new instance of Runtime with the specified SharedState type.
 func CreateRuntime[T g.SharedState](
-	startEdge *g.Edge[T],
+	startEdge g.Edge[T],
 	stateMonitorCh chan g.StateMonitorEntry[T],
 ) (g.Runtime[T], error) {
 	return CreateRuntimeWithMerger(startEdge, stateMonitorCh, nil)
@@ -15,7 +15,7 @@ func CreateRuntime[T g.SharedState](
 
 // CreateRuntimeWithMerger creates a new instance of Runtime with the specified SharedState type and state merger function.
 func CreateRuntimeWithMerger[T g.SharedState](
-	startEdge *g.Edge[T],
+	startEdge g.Edge[T],
 	stateMonitorCh chan g.StateMonitorEntry[T],
 	merger g.StateMergeFn[T],
 ) (g.Runtime[T], error) {
@@ -25,7 +25,7 @@ func CreateRuntimeWithMerger[T g.SharedState](
 
 // CreateRuntimeWithMergerAndInitialState creates a new instance of Runtime with the specified SharedState type, state merger function, and initial state.
 func CreateRuntimeWithMergerAndInitialState[T g.SharedState](
-	startEdge *g.Edge[T],
+	startEdge g.Edge[T],
 	stateMonitorCh chan g.StateMonitorEntry[T],
 	merger g.StateMergeFn[T],
 	initialState T,

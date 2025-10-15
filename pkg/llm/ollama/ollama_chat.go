@@ -8,34 +8,36 @@ import (
 
 	b "github.com/morphy76/ggraph/pkg/builders"
 	g "github.com/morphy76/ggraph/pkg/graph"
+	"github.com/morphy76/ggraph/pkg/llm"
 )
 
 // CreateOLLamaChatNode creates a graph node that interacts with the Ollama chat model.
-func CreateOLLamaChatNodeFromEnvironment(name string, model string) (g.Node[ChatModel], error) {
+func CreateOLLamaChatNodeFromEnvironment(name string, model string) (g.Node[llm.AgentModel], error) {
 	client, err := api.ClientFromEnvironment()
 	if err != nil {
 		return nil, err
 	}
 
-	chatFunction := func(state ChatModel, notify func(ChatModel)) (ChatModel, error) {
+	chatFunction := func(state llm.AgentModel, notify func(llm.AgentModel)) (llm.AgentModel, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
 		chatRequest := &api.ChatRequest{
 			Model:    model,
-			Messages: state.messages,
+			Messages: ToLLamaModel(state),
 		}
 
 		init := false
 		respFunc := func(response api.ChatResponse) error {
+			mex := FromLLamaMessage(response.Message)
 			if !init {
-				state.messages = append(state.messages, response.Message)
+				state.Messages = append(state.Messages)
 				init = true
 			} else {
-				state.messages[len(state.messages)-1].Content += response.Message.Content
+				state.Messages[len(state.Messages)-1].Content += mex.Content
 			}
-			notify(ChatModel{
-				messages: []api.Message{response.Message},
+			notify(llm.AgentModel{
+				Messages: []llm.Message{mex},
 			})
 			return nil
 		}

@@ -10,12 +10,12 @@ import (
 // CreateStartNode creates a new instance of StartNode with the specified SharedState type.
 func CreateStartNode[T g.SharedState]() g.Node[T] {
 	policy, _ := CreateAnyRoutePolicy[T]()
-	return i.NodeImplFactory("StartNode", nil, policy)
+	return i.NodeImplFactory("StartNode", nil, policy, g.StartNode)
 }
 
 // CreateEndNode creates a new instance of EndNode with the specified SharedState type.
 func CreateEndNode[T g.SharedState]() g.Node[T] {
-	return i.NodeImplFactory[T]("EndNode", nil, nil)
+	return i.NodeImplFactory[T]("EndNode", nil, nil, g.EndNode)
 }
 
 // CreateRouter creates a new instance of Node with the specified SharedState type and routing policy.
@@ -35,7 +35,7 @@ func CreateNodeWithRoutingPolicy[T g.SharedState](name string, fn g.NodeFunc[T],
 	if policy == nil {
 		return nil, fmt.Errorf("node creation failed: route policy cannot be nil")
 	}
-	return i.NodeImplFactory(name, fn, policy), nil
+	return i.NodeImplFactory(name, fn, policy, g.IntermediateNode), nil
 }
 
 // CreateNode creates a new instance of Node with the specified SharedState type.

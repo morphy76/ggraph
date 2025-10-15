@@ -10,7 +10,7 @@ import (
 
 // RuntimeFactory creates a new instance of Runtime with the specified SharedState type, state merger function, and initial state.
 func RuntimeFactory[T g.SharedState](
-	startEdge *g.Edge[T],
+	startEdge g.Edge[T],
 	stateMonitorCh chan g.StateMonitorEntry[T],
 	merger g.StateMergeFn[T],
 	initialState T,
@@ -26,7 +26,7 @@ func RuntimeFactory[T g.SharedState](
 		outcomeCh:      make(chan nodeFnReturnStruct[T]),
 		stateMonitorCh: stateMonitorCh,
 
-		startEdge: *startEdge,
+		startEdge: startEdge,
 		edges:     []g.Edge[T]{},
 
 		state:          initialState,
@@ -138,8 +138,7 @@ func (r *runtimeImpl[T]) onStatusChange() {
 				r.stateMonitorCh <- GraphRunning(result.node.Name(), previous, r.state)
 			}
 
-			_, isEndNode := result.node.(*g.Node[T])
-			if isEndNode {
+			if result.node.Role() == g.EndNode {
 				if r.stateMonitorCh != nil {
 					r.stateMonitorCh <- GraphCompleted(r.state)
 					r.singleUserLock.Unlock()
@@ -197,11 +196,11 @@ func (r *runtimeImpl[T]) merge(current, other T) T {
 
 func (r *runtimeImpl[T]) edgesFrom(node g.Node[T]) []g.Edge[T] {
 	if r.startEdge.From() == node {
-		return []g.Edge[T]{&r.StartEdge()}
+		return []g.Edge[T]{r.StartEdge()}
 	}
 	var outboundEdges []g.Edge[T]
 	for _, edge := range r.edges {
-		if edgeFrom(edge) == node {
+		if edge.From() == node {
 			outboundEdges = append(outboundEdges, edge)
 		}
 	}
@@ -210,7 +209,7 @@ func (r *runtimeImpl[T]) edgesFrom(node g.Node[T]) []g.Edge[T] {
 
 func (r *runtimeImpl[T]) hasPathToEndEdge(node g.Node[T], visited map[string]bool) bool {
 	// Check if the node is an EndNode
-	if _, ok := node.(*g.EndNode[T]); ok {
+	if node.Role() == g.EndNode {
 		return true
 	}
 
@@ -223,8 +222,8 @@ func (r *runtimeImpl[T]) hasPathToEndEdge(node g.Node[T], visited map[string]boo
 
 	// Check if any EndEdge starts from this node
 	for _, edge := range r.edges {
-		if endEdge, ok := edge.(*g.EndEdge[T]); ok {
-			if edgeFrom[T](endEdge) == node {
+		if edge.Role() == g.EndEdge {
+			if edge.From() == node {
 				return true
 			}
 		}
@@ -232,38 +231,12 @@ func (r *runtimeImpl[T]) hasPathToEndEdge(node g.Node[T], visited map[string]boo
 
 	// Explore all edges to find connected nodes
 	for _, edge := range r.edges {
-		if edgeFrom[T](edge) == node {
-			if r.hasPathToEndEdge(edgeTo[T](edge), visited) {
+		if edge.From() == node {
+			if r.hasPathToEndEdge(edge.To(), visited) {
 				return true
 			}
 		}
 	}
 
 	return false
-}
-
-func edgeFrom[T g.SharedState](edge g.Edge[T]) g.Node[T] {
-	switch e := edge.(type) {
-	case *edgeImpl[T]:
-		return e.from
-	case *g.StartEdge[T]:
-		return e.from
-	case *g.EndEdge[T]:
-		return e.from
-	default:
-		return nil
-	}
-}
-
-func edgeTo[T g.SharedState](edge g.Edge[T]) g.Node[T] {
-	switch e := edge.(type) {
-	case *edgeImpl[T]:
-		return e.to
-	case *g.StartEdge[T]:
-		return e.to
-	case *g.EndEdge[T]:
-		return e.to
-	default:
-		return nil
-	}
 }

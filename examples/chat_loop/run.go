@@ -9,8 +9,8 @@ import (
 
 	b "github.com/morphy76/ggraph/pkg/builders"
 	g "github.com/morphy76/ggraph/pkg/graph"
+	"github.com/morphy76/ggraph/pkg/llm"
 	"github.com/morphy76/ggraph/pkg/llm/ollama"
-	"github.com/ollama/ollama/api"
 )
 
 func main() {
@@ -25,15 +25,14 @@ func main() {
 
 	// Build simple graph: chat -> end
 	startEdge := b.CreateStartEdge(chatNode)
-	stateMonitorCh := make(chan g.StateMonitorEntry[ollama.ChatModel], 10)
+	stateMonitorCh := make(chan g.StateMonitorEntry[llm.AgentModel], 10)
 
 	// Initialize with system message
-	initialState := ollama.NewChatModel(api.Message{
-		Role:    "system",
-		Content: "You are a helpful cooking assistant. You provide advice, recipes, and tips about cooking. Keep responses concise and friendly.",
-	})
+	initialState := llm.CreateModel(
+		llm.CreateMessage(llm.System, "You are a helpful cooking assistant. You provide advice, recipes, and tips about cooking. Keep responses concise and friendly."),
+	)
 
-	g, err := b.CreateRuntimeWithMergerAndInitialState(startEdge, stateMonitorCh, ollama.MergeChatModels, initialState)
+	g, err := b.CreateRuntimeWithMergerAndInitialState(startEdge, stateMonitorCh, llm.MergeAgentModel, initialState)
 	if err != nil {
 		log.Fatalf("Runtime creation failed: %v", err)
 	}
@@ -64,10 +63,7 @@ func main() {
 		}
 
 		// Add user message
-		currentState.AddMessage(api.Message{
-			Role:    "user",
-			Content: text,
-		})
+		currentState.AddUserMessage(text)
 
 		// Invoke graph with current state
 		g.Invoke(currentState)
@@ -81,10 +77,10 @@ func main() {
 
 			if entry.Partial {
 				currentState = entry.CurrentState
-				messages := currentState.Messages()
+				messages := currentState.Messages
 				if len(messages) > 0 {
 					lastMsg := messages[len(messages)-1]
-					if lastMsg.Role == "assistant" {
+					if lastMsg.Role == llm.Assistant {
 						fmt.Print(lastMsg.Content)
 					}
 				}
@@ -92,10 +88,10 @@ func main() {
 
 			if !entry.Running {
 				currentState = entry.CurrentState
-				messages := currentState.Messages()
+				messages := currentState.Messages
 				if len(messages) > 0 {
 					lastMsg := messages[len(messages)-1]
-					if lastMsg.Role == "assistant" {
+					if lastMsg.Role == llm.Assistant {
 						fmt.Printf("🤖 Assistant: %s\n\n", lastMsg.Content)
 					}
 				}

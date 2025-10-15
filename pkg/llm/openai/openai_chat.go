@@ -8,13 +8,14 @@ import (
 
 	b "github.com/morphy76/ggraph/pkg/builders"
 	g "github.com/morphy76/ggraph/pkg/graph"
+	"github.com/morphy76/ggraph/pkg/llm"
 )
 
 // CreateOpenAIChatNode creates a graph node that interacts with the OpenAI chat model.
-func CreateOpenAIChatNodeFromEnvironment(name string, model string) (g.Node[ChatModel], error) {
+func CreateOpenAIChatNodeFromEnvironment(name string, model string) (g.Node[llm.AgentModel], error) {
 	client := openai.NewClient()
 
-	chatFunction := func(state ChatModel, notify func(ChatModel)) (ChatModel, error) {
+	chatFunction := func(state llm.AgentModel, notify func(llm.AgentModel)) (llm.AgentModel, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 

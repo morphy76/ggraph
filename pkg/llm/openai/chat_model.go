@@ -1,33 +1,63 @@
 package openai
 
 import (
+	"time"
+
+	"github.com/morphy76/ggraph/pkg/llm"
 	"github.com/openai/openai-go/v3"
 )
 
-// ChatModel represents a chat-based language model using the OpenAI API.
-type ChatModel struct {
-	messages []openai.Message
-}
-
-// NewChatModel creates a new ChatModel with the given initial messages.
-func NewChatModel(messages ...openai.Message) ChatModel {
-	return ChatModel{messages: messages}
-}
-
-// AddMessage appends a message to the chat model.
-func (c *ChatModel) AddMessage(msg openai.Message) {
-	c.messages = append(c.messages, msg)
-}
-
-// Messages returns a copy of all messages in the chat model.
-func (c ChatModel) Messages() []openai.Message {
-	return append([]openai.Message{}, c.messages...)
-}
-
-// MergeChatModels merges two ChatModel instances by appending messages from the new model to the original.
-func MergeChatModels(original, new ChatModel) ChatModel {
-	if len(new.messages) > 0 {
-		original.messages = new.messages
+func ToOpenAIModel(model llm.AgentModel) []openai.ChatCompletionMessageParamUnion {
+	rv := make([]openai.ChatCompletionMessageParamUnion, len(model.Messages))
+	for i, msg := range model.Messages {
+		rv[i] = ToOpenAIMessage(msg)
 	}
-	return original
+	return rv
+}
+
+func ToOpenAIMessage(msg llm.Message) openai.ChatCompletionMessageParamUnion {
+	switch msg.Role {
+	case llm.System:
+		return openai.SystemMessage(msg.Content)
+	case llm.User:
+		return openai.UserMessage(msg.Content)
+	case llm.Assistant:
+		return openai.AssistantMessage(msg.Content)
+	default:
+		return openai.UserMessage(msg.Content)
+	}
+}
+
+func FromOpenAIMessage(msg openai.ChatCompletionResponse) llm.Message {
+	return llm.Message{
+		Ts:      time.Now(),
+		Role:    encodeRole(msg.Role),
+		Content: msg.Content,
+	}
+}
+
+func encodeRole(role string) openai {
+	switch role {
+	case "system":
+		return llm.System
+	case "user":
+		return llm.User
+	case "assistant":
+		return llm.Assistant
+	default:
+		return llm.User
+	}
+}
+
+func decodeRole(role llm.MessageRole) string {
+	switch role {
+	case llm.System:
+		return "system"
+	case llm.User:
+		return "user"
+	case llm.Assistant:
+		return "assistant"
+	default:
+		return "user"
+	}
 }
