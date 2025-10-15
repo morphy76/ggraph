@@ -18,8 +18,8 @@ type MyState struct {
 
 func main() {
 
-	routingPolicy, err := b.CreateConditionalRoutePolicy(func(state MyState, edges []g.Edge[MyState]) g.Edge[MyState] {
-		op := state.op
+	routingPolicy, err := b.CreateConditionalRoutePolicy(func(userInput, currentState MyState, edges []g.Edge[MyState]) g.Edge[MyState] {
+		op := userInput.op
 		for _, edge := range edges {
 			if label, ok := edge.LabelByKey("operation"); ok && label == op {
 				return edge
@@ -28,18 +28,21 @@ func main() {
 		return nil
 	})
 	routerNode, err := b.CreateRouter("operation_routing", routingPolicy)
+	if err != nil {
+		log.Fatalf("Router creation failed: %v", err)
+	}
 
 	adder, err := b.CreateNode("Adder", func(userInput MyState, currentState MyState, notify func(MyState)) (MyState, error) {
-		userInput.Result = userInput.Result + userInput.num2
-		return userInput, nil
+		currentState.Result = currentState.Result + userInput.num2
+		return currentState, nil
 	})
 	if err != nil {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
 	subtractor, err := b.CreateNode("Subtractor", func(userInput MyState, currentState MyState, notify func(MyState)) (MyState, error) {
-		userInput.Result = userInput.Result - userInput.num2
-		return userInput, nil
+		currentState.Result = currentState.Result - userInput.num2
+		return currentState, nil
 	})
 	if err != nil {
 		log.Fatalf("Node creation failed: %v", err)
@@ -71,7 +74,7 @@ func main() {
 	for {
 		entry := <-stateMonitorCh
 		if !entry.Running {
-			fmt.Printf("State Monitor Node: %s Entry: %+v Error: %v\n", entry.Node, entry.CurrentState, entry.Error)
+			fmt.Printf("State Monitor Node: %s Entry: %+v Error: %v\n", entry.Node, entry.CurrentState.Result, entry.Error)
 			breakLoop--
 			if breakLoop == 0 {
 				break

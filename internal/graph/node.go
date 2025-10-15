@@ -16,11 +16,15 @@ func NodeImplFactory[T g.SharedState](name string, fn g.NodeFunc[T], routePolicy
 			return currentState, nil
 		}
 	}
+	usePloicy := routePolicy
+	if usePloicy == nil {
+		usePloicy, _ = RouterPolicyImplFactory[T](AnyRoute)
+	}
 	return &nodeImpl[T]{
 		mailbox:     make(chan T, 100),
 		name:        name,
 		fn:          useFn,
-		routePolicy: routePolicy,
+		routePolicy: usePloicy,
 		role:        role,
 	}
 }

@@ -28,12 +28,6 @@ func CreateNodeWithRoutingPolicy[T g.SharedState](name string, fn g.NodeFunc[T],
 	if name == "" {
 		return nil, fmt.Errorf("node creation failed: name cannot be empty")
 	}
-	if fn == nil {
-		return nil, fmt.Errorf("node creation failed: function cannot be nil")
-	}
-	if policy == nil {
-		return nil, fmt.Errorf("node creation failed: route policy cannot be nil")
-	}
 	return i.NodeImplFactory(name, fn, policy, g.IntermediateNode), nil
 }
 

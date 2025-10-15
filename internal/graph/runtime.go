@@ -170,7 +170,7 @@ func (r *runtimeImpl[T]) onStateChange() {
 				continue
 			}
 
-			nextEdge := policy.SelectEdge(r.state, outboundEdges)
+			nextEdge := policy.SelectEdge(result.userInput, r.state, outboundEdges)
 			if nextEdge == nil {
 				r.stateMonitorCh <- GraphError(result.node.Name(), r.state, fmt.Errorf("routing policy for node %s returned nil edge", result.node.Name()))
 				r.singleUserLock.Unlock()

@@ -56,9 +56,9 @@ func main() {
 	})
 
 	// Router: Check success
-	routingPolicy, _ := b.CreateConditionalRoutePolicy(func(state GameState, edges []g.Edge[GameState]) g.Edge[GameState] {
+	routingPolicy, _ := b.CreateConditionalRoutePolicy(func(userInput, currentState GameState, edges []g.Edge[GameState]) g.Edge[GameState] {
 		for _, edge := range edges {
-			if state.Success {
+			if currentState.Success {
 				if label, ok := edge.LabelByKey("path"); ok && label == "success" {
 					return edge
 				}
@@ -70,7 +70,10 @@ func main() {
 		}
 		return nil
 	})
-	router, _ := b.CreateRouter("CheckRouter", routingPolicy)
+	router, err := b.CreateRouter("CheckRouter", routingPolicy)
+	if err != nil {
+		log.Fatalf("Router creation failed: %v", err)
+	}
 
 	// End node for success
 	endNode := b.CreateEndNode[GameState]()

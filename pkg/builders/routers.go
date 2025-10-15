@@ -7,12 +7,7 @@ import (
 
 // CreateAnyRoutePolicy creates a new instance of AnyRoutePolicy.
 func CreateAnyRoutePolicy[T g.SharedState]() (g.RoutePolicy[T], error) {
-	return CreateConditionalRoutePolicy(func(state T, edges []g.Edge[T]) g.Edge[T] {
-		if len(edges) == 0 {
-			return nil
-		}
-		return edges[0]
-	})
+	return CreateConditionalRoutePolicy(i.AnyRoute[T])
 }
 
 // CreateConditionalRoutePolicy creates a new instance of ConditionalRoutePolicy with the specified conditional function.
