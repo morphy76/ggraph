@@ -20,8 +20,7 @@ func CreateEndNode[T g.SharedState]() g.Node[T] {
 
 // CreateRouter creates a new instance of Node with the specified SharedState type and routing policy.
 func CreateRouter[T g.SharedState](name string, policy g.RoutePolicy[T]) (g.Node[T], error) {
-	passthrough := func(state T, notify func(T)) (T, error) { return state, nil }
-	return CreateNodeWithRoutingPolicy(name, passthrough, policy)
+	return CreateNodeWithRoutingPolicy(name, nil, policy)
 }
 
 // CreateNodeWithRoutingPolicy creates a new instance of Node with the specified SharedState type and routing policy.

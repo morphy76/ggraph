@@ -46,36 +46,36 @@ func merge(original, new GameState) GameState {
 
 func main() {
 	// Node 1: Determine target number
-	initNode, _ := b.CreateNode("InitNode", func(state GameState, notify func(GameState)) (GameState, error) {
-		state.Target = rand.Intn(100) + 1
-		state.Tries = 0
-		state.Low = 1
-		state.High = 100
+	initNode, _ := b.CreateNode("InitNode", func(userInput GameState, currentState GameState, notify func(GameState)) (GameState, error) {
+		currentState.Target = rand.Intn(100) + 1
+		currentState.Tries = 0
+		currentState.Low = 1
+		currentState.High = 100
 		fmt.Printf("🎯 Target set (hidden)\n")
-		return state, nil
+		return currentState, nil
 	})
 
 	// Node 2: Make a guess using binary search
-	guessNode, _ := b.CreateNode("GuessNode", func(state GameState, notify func(GameState)) (GameState, error) {
-		state.Tries++
-		state.Guess = (state.Low + state.High) / 2
-		state.Success = (state.Guess == state.Target)
-		fmt.Printf("🤔 Try #%d: Guessed %d (range: %d-%d)\n", state.Tries, state.Guess, state.Low, state.High)
-		return state, nil
+	guessNode, _ := b.CreateNode("GuessNode", func(userInput GameState, currentState GameState, notify func(GameState)) (GameState, error) {
+		currentState.Tries++
+		currentState.Guess = (currentState.Low + currentState.High) / 2
+		currentState.Success = (currentState.Guess == currentState.Target)
+		fmt.Printf("🤔 Try #%d: Guessed %d (range: %d-%d)\n", currentState.Tries, currentState.Guess, currentState.Low, currentState.High)
+		return currentState, nil
 	})
 
 	// Node 3: Provide hint and adjust range
-	hintNode, _ := b.CreateNode("HintNode", func(state GameState, notify func(GameState)) (GameState, error) {
-		if state.Guess < state.Target {
-			state.Low = state.Guess + 1
-			state.Hint = "higher"
+	hintNode, _ := b.CreateNode("HintNode", func(userInput GameState, currentState GameState, notify func(GameState)) (GameState, error) {
+		if currentState.Guess < currentState.Target {
+			currentState.Low = currentState.Guess + 1
+			currentState.Hint = "higher"
 			fmt.Printf("💡 Hint: Try higher!\n")
 		} else {
-			state.High = state.Guess - 1
-			state.Hint = "lower"
+			currentState.High = currentState.Guess - 1
+			currentState.Hint = "lower"
 			fmt.Printf("💡 Hint: Try lower!\n")
 		}
-		return state, nil
+		return currentState, nil
 	})
 
 	// Router: Check success
@@ -96,10 +96,7 @@ func main() {
 	router, _ := b.CreateRouter("CheckRouter", routingPolicy)
 
 	// End node for success
-	endNode, _ := b.CreateNode("EndNode", func(state GameState, notify func(GameState)) (GameState, error) {
-		fmt.Printf("🎉 Correct! The answer was %d\n", state.Target)
-		return state, nil
-	})
+	endNode := b.CreateEndNode[GameState]()
 
 	// Build graph
 	startEdge := b.CreateStartEdge(initNode)

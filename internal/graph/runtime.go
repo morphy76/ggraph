@@ -69,10 +69,10 @@ type runtimeImpl[T g.SharedState] struct {
 	singleUserLock *sync.Mutex
 }
 
-func (r *runtimeImpl[T]) Invoke(entryState T) {
+func (r *runtimeImpl[T]) Invoke(userInput T) {
 	r.singleUserLock.Lock()
 
-	r.startEdge.From().Accept(entryState, r)
+	r.startEdge.From().Accept(userInput, r)
 }
 
 func (r *runtimeImpl[T]) AddEdge(edge ...g.Edge[T]) {
@@ -105,6 +105,10 @@ func (r *runtimeImpl[T]) NotifyStateChange(node g.Node[T], state T, err error, p
 
 func (r *runtimeImpl[T]) StartEdge() g.Edge[T] {
 	return r.startEdge
+}
+
+func (r *runtimeImpl[T]) CurrentState() T {
+	return r.state
 }
 
 func (r *runtimeImpl[T]) start() {

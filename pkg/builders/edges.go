@@ -12,10 +12,10 @@ func CreateEdge[T g.SharedState](from, to g.Node[T], labels ...map[string]string
 
 // CreateStartEdge creates a new instance of StartEdge with the specified SharedState type.
 func CreateStartEdge[T g.SharedState](to g.Node[T]) g.Edge[T] {
-	return i.EdgeImplFactory(nil, to, g.StartEdge)
+	return i.EdgeImplFactory(CreateStartNode[T](), to, g.StartEdge)
 }
 
 // CreateEndEdge creates a new instance of EndEdge with the specified SharedState type.
 func CreateEndEdge[T g.SharedState](from g.Node[T]) g.Edge[T] {
-	return i.EdgeImplFactory(from, nil, g.EndEdge)
+	return i.EdgeImplFactory(from, CreateEndNode[T](), g.EndEdge)
 }

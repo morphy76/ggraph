@@ -42,17 +42,17 @@ func main() {
 	})
 	routerNode, err := b.CreateRouter("operation_routing", routingPolicy)
 
-	adder, err := b.CreateNode("Adder", func(state MyState, notify func(MyState)) (MyState, error) {
-		state.Result = state.Result + state.num2
-		return state, nil
+	adder, err := b.CreateNode("Adder", func(userInput MyState, currentState MyState, notify func(MyState)) (MyState, error) {
+		userInput.Result = userInput.Result + userInput.num2
+		return userInput, nil
 	})
 	if err != nil {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
-	subtractor, err := b.CreateNode("Subtractor", func(state MyState, notify func(MyState)) (MyState, error) {
-		state.Result = state.Result - state.num2
-		return state, nil
+	subtractor, err := b.CreateNode("Subtractor", func(userInput MyState, currentState MyState, notify func(MyState)) (MyState, error) {
+		userInput.Result = userInput.Result - userInput.num2
+		return userInput, nil
 	})
 	if err != nil {
 		log.Fatalf("Node creation failed: %v", err)

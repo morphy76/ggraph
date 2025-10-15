@@ -23,17 +23,17 @@ func merge(originalState, newState MyState) MyState {
 
 func main() {
 
-	helloNode, err := b.CreateNode("HelloNode", func(state MyState, notify func(MyState)) (MyState, error) {
-		state.Message = fmt.Sprintf("Hello %s!!!", state.Message)
-		return state, nil
+	helloNode, err := b.CreateNode("HelloNode", func(userInput MyState, currentState MyState, notify func(MyState)) (MyState, error) {
+		currentState.Message = fmt.Sprintf("Hello %s!!!", userInput.Message)
+		return currentState, nil
 	})
 	if err != nil {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
-	goodbyeNode, err := b.CreateNode("GoodbyeNode", func(state MyState, notify func(MyState)) (MyState, error) {
-		state.Message = fmt.Sprintf("Goodbye %s!!!", state.Message)
-		return state, nil
+	goodbyeNode, err := b.CreateNode("GoodbyeNode", func(userInput MyState, currentState MyState, notify func(MyState)) (MyState, error) {
+		currentState.Message = fmt.Sprintf("Goodbye %s!!!", userInput.Message)
+		return currentState, nil
 	})
 	if err != nil {
 		log.Fatalf("Node creation failed: %v", err)

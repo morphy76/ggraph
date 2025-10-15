@@ -1,7 +1,7 @@
 package graph
 
 // NodeFunc defines a function type that processes a node with the given SharedState type.
-type NodeFunc[T SharedState] func(state T, notify func(T)) (T, error)
+type NodeFunc[T SharedState] func(userInput T, currentState T, notify func(T)) (T, error)
 
 // EdgeSelectionFn defines a function type for conditional routing based on the current state and available edges.
 type EdgeSelectionFn[T SharedState] func(state T, edges []Edge[T]) Edge[T]
@@ -13,4 +13,6 @@ type StateMergeFn[T SharedState] func(current, other T) T
 type StateObserver[T SharedState] interface {
 	// NotifyStateChange is called when a node changes state during processing.
 	NotifyStateChange(node Node[T], state T, err error, partial bool)
+	// CurrentState returns the current state of the observer.
+	CurrentState() T
 }

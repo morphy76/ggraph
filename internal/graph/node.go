@@ -10,10 +10,16 @@ import (
 
 // NodeImplFactory creates a new instance of Node with the specified SharedState type.
 func NodeImplFactory[T g.SharedState](name string, fn g.NodeFunc[T], routePolicy g.RoutePolicy[T], role g.NodeRole) g.Node[T] {
+	useFn := fn
+	if useFn == nil {
+		useFn = func(userInput T, currentState T, notify func(T)) (T, error) {
+			return currentState, nil
+		}
+	}
 	return &nodeImpl[T]{
 		mailbox:     make(chan T, 100),
 		name:        name,
-		fn:          fn,
+		fn:          useFn,
 		routePolicy: routePolicy,
 		role:        role,
 	}
@@ -50,7 +56,7 @@ func (n *nodeImpl[T]) Accept(deltaState T, runtime g.StateObserver[T]) {
 
 		select {
 		case asyncDeltaState := <-n.mailbox:
-			updatedState, err := n.fn(asyncDeltaState, partialStateChange)
+			updatedState, err := n.fn(asyncDeltaState, runtime.CurrentState(), partialStateChange)
 			if err != nil {
 				runtime.NotifyStateChange(n, updatedState, fmt.Errorf("error executing node %s: %w", n.name, err), false)
 				return

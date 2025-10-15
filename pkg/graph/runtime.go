@@ -11,9 +11,8 @@ type Connected[T SharedState] interface {
 // Runtime represents the runtime environment for graph processing.
 type Runtime[T SharedState] interface {
 	Connected[T]
-	// TODO concurrent invoke: invoke call while another is still running
-	// Invoke executes the graph processing with the given entry state.
-	Invoke(entryState T)
+	// Invoke executes the graph processing with the given user input.
+	Invoke(userInput T)
 	// TODO invoke with context
 	// InvokeWithContext(ctx context.Context, entryState T)
 	// Shutdown gracefully stops the runtime processing.
