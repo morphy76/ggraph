@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/morphy76/ggraph/pkg/graph"
+	b "github.com/morphy76/ggraph/pkg/builders"
+	g "github.com/morphy76/ggraph/pkg/graph"
 )
 
-var _ graph.SharedState = (*MyState)(nil)
+var _ g.SharedState = (*MyState)(nil)
 
 type MyState struct {
 	Message string
@@ -22,7 +23,7 @@ func merge(originalState, newState MyState) MyState {
 
 func main() {
 
-	helloNode, err := graph.CreateNode("HelloNode", func(state MyState, notify func(MyState)) (MyState, error) {
+	helloNode, err := b.CreateNode("HelloNode", func(state MyState, notify func(MyState)) (MyState, error) {
 		state.Message = fmt.Sprintf("Hello %s!!!", state.Message)
 		return state, nil
 	})
@@ -30,7 +31,7 @@ func main() {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
-	goodbyeNode, err := graph.CreateNode("GoodbyeNode", func(state MyState, notify func(MyState)) (MyState, error) {
+	goodbyeNode, err := b.CreateNode("GoodbyeNode", func(state MyState, notify func(MyState)) (MyState, error) {
 		state.Message = fmt.Sprintf("Goodbye %s!!!", state.Message)
 		return state, nil
 	})
@@ -38,13 +39,13 @@ func main() {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
-	startEdge := graph.CreateStartEdge(helloNode)
-	midEdge := graph.CreateEdge(helloNode, goodbyeNode)
-	endEdge := graph.CreateEndEdge(goodbyeNode)
+	startEdge := b.CreateStartEdge(helloNode)
+	midEdge := b.CreateEdge(helloNode, goodbyeNode)
+	endEdge := b.CreateEndEdge(goodbyeNode)
 
 	initialState := MyState{Message: ""}
-	stateMonitorCh := make(chan graph.StateMonitorEntry[MyState], 10)
-	graph, err := graph.CreateRuntimeWithMergerAndInitialState(startEdge, stateMonitorCh, merge, initialState)
+	stateMonitorCh := make(chan g.StateMonitorEntry[MyState], 10)
+	graph, err := b.CreateRuntimeWithMergerAndInitialState(startEdge, stateMonitorCh, merge, initialState)
 	if err != nil {
 		log.Fatalf("Runtime creation failed: %v", err)
 	}

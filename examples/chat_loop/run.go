@@ -7,7 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/morphy76/ggraph/pkg/graph"
+	b "github.com/morphy76/ggraph/pkg/builders"
+	g "github.com/morphy76/ggraph/pkg/graph"
 	"github.com/morphy76/ggraph/pkg/llm/ollama"
 	"github.com/ollama/ollama/api"
 )
@@ -23,8 +24,8 @@ func main() {
 	}
 
 	// Build simple graph: chat -> end
-	startEdge := graph.CreateStartEdge(chatNode)
-	stateMonitorCh := make(chan graph.StateMonitorEntry[ollama.ChatModel], 10)
+	startEdge := b.CreateStartEdge(chatNode)
+	stateMonitorCh := make(chan g.StateMonitorEntry[ollama.ChatModel], 10)
 
 	// Initialize with system message
 	initialState := ollama.NewChatModel(api.Message{
@@ -32,13 +33,13 @@ func main() {
 		Content: "You are a helpful cooking assistant. You provide advice, recipes, and tips about cooking. Keep responses concise and friendly.",
 	})
 
-	g, err := graph.CreateRuntimeWithMergerAndInitialState(startEdge, stateMonitorCh, ollama.MergeChatModels, initialState)
+	g, err := b.CreateRuntimeWithMergerAndInitialState(startEdge, stateMonitorCh, ollama.MergeChatModels, initialState)
 	if err != nil {
 		log.Fatalf("Runtime creation failed: %v", err)
 	}
 	defer g.Shutdown()
 
-	g.AddEdge(graph.CreateEndEdge(chatNode))
+	g.AddEdge(b.CreateEndEdge(chatNode))
 
 	if err := g.Validate(); err != nil {
 		log.Fatalf("Validation failed: %v", err)

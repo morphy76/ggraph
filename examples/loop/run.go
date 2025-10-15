@@ -5,10 +5,11 @@ import (
 	"log"
 	"math/rand"
 
-	"github.com/morphy76/ggraph/pkg/graph"
+	b "github.com/morphy76/ggraph/pkg/builders"
+	g "github.com/morphy76/ggraph/pkg/graph"
 )
 
-var _ graph.SharedState = (*GameState)(nil)
+var _ g.SharedState = (*GameState)(nil)
 
 type GameState struct {
 	Target  int
@@ -45,7 +46,7 @@ func merge(original, new GameState) GameState {
 
 func main() {
 	// Node 1: Determine target number
-	initNode, _ := graph.CreateNode("InitNode", func(state GameState, notify func(GameState)) (GameState, error) {
+	initNode, _ := b.CreateNode("InitNode", func(state GameState, notify func(GameState)) (GameState, error) {
 		state.Target = rand.Intn(100) + 1
 		state.Tries = 0
 		state.Low = 1
@@ -55,7 +56,7 @@ func main() {
 	})
 
 	// Node 2: Make a guess using binary search
-	guessNode, _ := graph.CreateNode("GuessNode", func(state GameState, notify func(GameState)) (GameState, error) {
+	guessNode, _ := b.CreateNode("GuessNode", func(state GameState, notify func(GameState)) (GameState, error) {
 		state.Tries++
 		state.Guess = (state.Low + state.High) / 2
 		state.Success = (state.Guess == state.Target)
@@ -64,7 +65,7 @@ func main() {
 	})
 
 	// Node 3: Provide hint and adjust range
-	hintNode, _ := graph.CreateNode("HintNode", func(state GameState, notify func(GameState)) (GameState, error) {
+	hintNode, _ := b.CreateNode("HintNode", func(state GameState, notify func(GameState)) (GameState, error) {
 		if state.Guess < state.Target {
 			state.Low = state.Guess + 1
 			state.Hint = "higher"
@@ -78,7 +79,7 @@ func main() {
 	})
 
 	// Router: Check success
-	routingPolicy, _ := graph.CreateConditionalRoutePolicy(func(state GameState, edges []graph.Edge[GameState]) graph.Edge[GameState] {
+	routingPolicy, _ := b.CreateConditionalRoutePolicy(func(state GameState, edges []g.Edge[GameState]) g.Edge[GameState] {
 		for _, edge := range edges {
 			if state.Success {
 				if label, ok := edge.LabelByKey("path"); ok && label == "success" {
@@ -92,27 +93,27 @@ func main() {
 		}
 		return nil
 	})
-	router, _ := graph.CreateRouter("CheckRouter", routingPolicy)
+	router, _ := b.CreateRouter("CheckRouter", routingPolicy)
 
 	// End node for success
-	endNode, _ := graph.CreateNode("EndNode", func(state GameState, notify func(GameState)) (GameState, error) {
+	endNode, _ := b.CreateNode("EndNode", func(state GameState, notify func(GameState)) (GameState, error) {
 		fmt.Printf("🎉 Correct! The answer was %d\n", state.Target)
 		return state, nil
 	})
 
 	// Build graph
-	startEdge := graph.CreateStartEdge(initNode)
-	stateMonitorCh := make(chan graph.StateMonitorEntry[GameState], 10)
-	g, _ := graph.CreateRuntimeWithMergerAndInitialState(startEdge, stateMonitorCh, merge, GameState{})
+	startEdge := b.CreateStartEdge(initNode)
+	stateMonitorCh := make(chan g.StateMonitorEntry[GameState], 10)
+	g, _ := b.CreateRuntimeWithMergerAndInitialState(startEdge, stateMonitorCh, merge, GameState{})
 	defer g.Shutdown()
 
 	g.AddEdge(
-		graph.CreateEdge(initNode, guessNode),
-		graph.CreateEdge(guessNode, router),
-		graph.CreateEdge(router, hintNode, map[string]string{"path": "fail"}),
-		graph.CreateEdge(hintNode, guessNode), // Loop back
-		graph.CreateEdge(router, endNode, map[string]string{"path": "success"}),
-		graph.CreateEndEdge(endNode),
+		b.CreateEdge(initNode, guessNode),
+		b.CreateEdge(guessNode, router),
+		b.CreateEdge(router, hintNode, map[string]string{"path": "fail"}),
+		b.CreateEdge(hintNode, guessNode), // Loop back
+		b.CreateEdge(router, endNode, map[string]string{"path": "success"}),
+		b.CreateEndEdge(endNode),
 	)
 
 	if err := g.Validate(); err != nil {

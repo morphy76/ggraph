@@ -6,11 +6,12 @@ import (
 
 	"github.com/ollama/ollama/api"
 
-	"github.com/morphy76/ggraph/pkg/graph"
+	b "github.com/morphy76/ggraph/pkg/builders"
+	g "github.com/morphy76/ggraph/pkg/graph"
 )
 
 // CreateOLLamaChatNode creates a graph node that interacts with the Ollama chat model.
-func CreateOLLamaChatNodeFromEnvironment(name string, model string) (graph.Node[ChatModel], error) {
+func CreateOLLamaChatNodeFromEnvironment(name string, model string) (g.Node[ChatModel], error) {
 	client, err := api.ClientFromEnvironment()
 	if err != nil {
 		return nil, err
@@ -46,5 +47,5 @@ func CreateOLLamaChatNodeFromEnvironment(name string, model string) (graph.Node[
 		return state, nil
 	}
 
-	return graph.CreateNode(name, chatFunction)
+	return b.CreateNode(name, chatFunction)
 }
