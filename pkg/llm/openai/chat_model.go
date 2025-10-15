@@ -7,12 +7,14 @@ import (
 	"github.com/openai/openai-go/v3"
 )
 
-func ToOpenAIModel(model llm.AgentModel) []openai.ChatCompletionMessageParamUnion {
-	rv := make([]openai.ChatCompletionMessageParamUnion, len(model.Messages))
-	for i, msg := range model.Messages {
-		rv[i] = ToOpenAIMessage(msg)
+func ToOpenAIModel(models ...llm.AgentModel) []openai.ChatCompletionMessageParamUnion {
+	var messages []openai.ChatCompletionMessageParamUnion
+	for _, m := range models {
+		for _, msg := range m.Messages {
+			messages = append(messages, ToOpenAIMessage(msg))
+		}
 	}
-	return rv
+	return messages
 }
 
 func ToOpenAIMessage(msg llm.Message) openai.ChatCompletionMessageParamUnion {
@@ -28,36 +30,10 @@ func ToOpenAIMessage(msg llm.Message) openai.ChatCompletionMessageParamUnion {
 	}
 }
 
-func FromOpenAIMessage(msg openai.ChatCompletionResponse) llm.Message {
+func FromOpenAIMessage(msg openai.ChatCompletionMessage) llm.Message {
 	return llm.Message{
 		Ts:      time.Now(),
-		Role:    encodeRole(msg.Role),
+		Role:    llm.Assistant,
 		Content: msg.Content,
-	}
-}
-
-func encodeRole(role string) openai {
-	switch role {
-	case "system":
-		return llm.System
-	case "user":
-		return llm.User
-	case "assistant":
-		return llm.Assistant
-	default:
-		return llm.User
-	}
-}
-
-func decodeRole(role llm.MessageRole) string {
-	switch role {
-	case llm.System:
-		return "system"
-	case llm.User:
-		return "user"
-	case llm.Assistant:
-		return "assistant"
-	default:
-		return "user"
 	}
 }

@@ -11,19 +11,38 @@ import (
 	"github.com/morphy76/ggraph/pkg/llm"
 )
 
-// CreateOpenAIChatNode creates a graph node that interacts with the OpenAI chat model.
+// CreateOpenAIChatNodeFromEnvironment creates a graph node that interacts with the OpenAI chat model.
 func CreateOpenAIChatNodeFromEnvironment(name string, model string) (g.Node[llm.AgentModel], error) {
 	client := openai.NewClient()
 
-	chatFunction := func(state llm.AgentModel, notify func(llm.AgentModel)) (llm.AgentModel, error) {
+	chatFunction := func(userInput, currentState llm.AgentModel, notify func(llm.AgentModel)) (llm.AgentModel, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
-		client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		acc := openai.ChatCompletionAccumulator{}
+		stream := client.Chat.Completions.NewStreaming(ctx, openai.ChatCompletionNewParams{
 			Model:    model,
-			Messages: []openai.ChatCompletionMessageParamUnion{},
+			Messages: ToOpenAIModel(currentState, userInput),
+			Seed:     openai.Int(0),
 		})
-		return state, nil
+
+		for stream.Next() {
+			chunk := stream.Current()
+			acc.AddChunk(chunk)
+			if len(chunk.Choices) > 0 {
+				notify(llm.AgentModel{
+					Messages: []llm.Message{{Role: llm.Assistant, Content: chunk.Choices[0].Delta.Content}},
+				})
+			}
+		}
+
+		if stream.Err() != nil {
+			return currentState, stream.Err()
+		}
+
+		currentState.Messages = append(currentState.Messages, FromOpenAIMessage(acc.Choices[0].Message))
+
+		return currentState, nil
 	}
 
 	return b.CreateNode(name, chatFunction)
