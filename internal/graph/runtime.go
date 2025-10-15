@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
@@ -30,9 +31,8 @@ func RuntimeFactory[T g.SharedState](
 
 		state:          initialState,
 		stateMergeLock: &sync.Mutex{},
-
-		singleUserLock: &sync.Mutex{},
 	}
+	rv.executing.Store(false)
 	rv.start()
 	return rv, nil
 }
@@ -65,11 +65,18 @@ type runtimeImpl[T g.SharedState] struct {
 	state          T
 	stateMergeLock *sync.Mutex
 
-	singleUserLock *sync.Mutex
+	executing atomic.Bool
 }
 
 func (r *runtimeImpl[T]) Invoke(userInput T) {
-	r.singleUserLock.Lock()
+	// Use atomic compare-and-swap to prevent concurrent invocations
+	if !r.executing.CompareAndSwap(false, true) {
+		// Already executing, send error to monitor channel
+		if r.stateMonitorCh != nil {
+			r.stateMonitorCh <- GraphError("Runtime", r.CurrentState(), fmt.Errorf("runtime is already executing, concurrent invocations not allowed"))
+		}
+		return
+	}
 
 	r.startEdge.From().Accept(userInput, r)
 }
@@ -113,6 +120,8 @@ func (r *runtimeImpl[T]) StartEdge() g.Edge[T] {
 }
 
 func (r *runtimeImpl[T]) CurrentState() T {
+	r.stateMergeLock.Lock()
+	defer r.stateMergeLock.Unlock()
 	return r.state
 }
 
@@ -124,13 +133,13 @@ func (r *runtimeImpl[T]) onStateChange() {
 	for {
 		select {
 		case <-r.ctx.Done():
-			r.singleUserLock.Unlock()
+			r.executing.Store(false)
 			return
 		case result := <-r.outcomeCh:
 			if result.err != nil {
 				if r.stateMonitorCh != nil {
 					r.stateMonitorCh <- GraphError(result.node.Name(), r.state, result.err)
-					r.singleUserLock.Unlock()
+					r.executing.Store(false)
 				}
 				continue
 			}
@@ -147,7 +156,7 @@ func (r *runtimeImpl[T]) onStateChange() {
 			if result.node.Role() == g.EndNode {
 				if r.stateMonitorCh != nil {
 					r.stateMonitorCh <- GraphCompleted(result.node.Name(), r.state)
-					r.singleUserLock.Unlock()
+					r.executing.Store(false)
 				}
 				continue
 			} else {
@@ -159,28 +168,28 @@ func (r *runtimeImpl[T]) onStateChange() {
 			outboundEdges := r.edgesFrom(result.node)
 			if len(outboundEdges) == 0 {
 				r.stateMonitorCh <- GraphError(result.node.Name(), r.state, fmt.Errorf("no outbound edges from node %s", result.node.Name()))
-				r.singleUserLock.Unlock()
+				r.executing.Store(false)
 				continue
 			}
 
 			policy := result.node.RoutePolicy()
 			if policy == nil {
 				r.stateMonitorCh <- GraphError(result.node.Name(), r.state, fmt.Errorf("node %s has no routing policy", result.node.Name()))
-				r.singleUserLock.Unlock()
+				r.executing.Store(false)
 				continue
 			}
 
 			nextEdge := policy.SelectEdge(result.userInput, r.state, outboundEdges)
 			if nextEdge == nil {
 				r.stateMonitorCh <- GraphError(result.node.Name(), r.state, fmt.Errorf("routing policy for node %s returned nil edge", result.node.Name()))
-				r.singleUserLock.Unlock()
+				r.executing.Store(false)
 				continue
 			}
 
 			nextNode := nextEdge.To()
 			if nextNode == nil {
 				r.stateMonitorCh <- GraphError(result.node.Name(), r.state, fmt.Errorf("next edge from node %s has nil target node", result.node.Name()))
-				r.singleUserLock.Unlock()
+				r.executing.Store(false)
 				continue
 			}
 
