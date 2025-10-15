@@ -7,12 +7,14 @@ import (
 	"github.com/ollama/ollama/api"
 )
 
-func ToLLamaModel(model llm.AgentModel) []api.Message {
-	rv := make([]api.Message, len(model.Messages))
-	for i, msg := range model.Messages {
-		rv[i] = ToLLamaMessage(msg)
+func ToLLamaModel(model ...llm.AgentModel) []api.Message {
+	var messages []api.Message
+	for _, m := range model {
+		for _, msg := range m.Messages {
+			messages = append(messages, ToLLamaMessage(msg))
+		}
 	}
-	return rv
+	return messages
 }
 
 func ToLLamaMessage(msg llm.Message) api.Message {

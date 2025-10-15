@@ -69,6 +69,8 @@ func main() {
 		g.Invoke(currentState)
 
 		// Wait for completion and get response
+		wasStreaming := false
+		fmt.Print("🤖 Assistant: ")
 		for entry := range stateMonitorCh {
 			if entry.Error != nil {
 				fmt.Printf("⚠️  Error: %v\n", entry.Error)
@@ -76,6 +78,7 @@ func main() {
 			}
 
 			if entry.Partial {
+				wasStreaming = true
 				currentState = entry.CurrentState
 				messages := currentState.Messages
 				if len(messages) > 0 {
@@ -87,12 +90,16 @@ func main() {
 			}
 
 			if !entry.Running {
-				currentState = entry.CurrentState
-				messages := currentState.Messages
-				if len(messages) > 0 {
-					lastMsg := messages[len(messages)-1]
-					if lastMsg.Role == llm.Assistant {
-						fmt.Printf("🤖 Assistant: %s\n\n", lastMsg.Content)
+				if wasStreaming {
+					fmt.Printf("\n\n")
+				} else {
+					currentState = entry.CurrentState
+					messages := currentState.Messages
+					if len(messages) > 0 {
+						lastMsg := messages[len(messages)-1]
+						if lastMsg.Role == llm.Assistant {
+							fmt.Printf("%s\n\n", lastMsg.Content)
+						}
 					}
 				}
 				break
