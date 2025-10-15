@@ -21,29 +21,6 @@ type GameState struct {
 	High    int
 }
 
-func merge(original, new GameState) GameState {
-	if new.Target != 0 {
-		original.Target = new.Target
-	}
-	if new.Guess != 0 {
-		original.Guess = new.Guess
-	}
-	if new.Tries > 0 {
-		original.Tries = new.Tries
-	}
-	original.Success = new.Success
-	if new.Hint != "" {
-		original.Hint = new.Hint
-	}
-	if new.Low > 0 {
-		original.Low = new.Low
-	}
-	if new.High > 0 {
-		original.High = new.High
-	}
-	return original
-}
-
 func main() {
 	// Node 1: Determine target number
 	initNode, _ := b.CreateNode("InitNode", func(userInput GameState, currentState GameState, notify func(GameState)) (GameState, error) {
@@ -101,7 +78,7 @@ func main() {
 	// Build graph
 	startEdge := b.CreateStartEdge(initNode)
 	stateMonitorCh := make(chan g.StateMonitorEntry[GameState], 10)
-	g, _ := b.CreateRuntimeWithMergerAndInitialState(startEdge, stateMonitorCh, merge, GameState{})
+	g, _ := b.CreateRuntime(startEdge, stateMonitorCh)
 	defer g.Shutdown()
 
 	g.AddEdge(

@@ -14,13 +14,6 @@ type MyState struct {
 	Message string
 }
 
-func merge(originalState, newState MyState) MyState {
-	if newState.Message != "" {
-		originalState.Message = newState.Message
-	}
-	return originalState
-}
-
 func main() {
 
 	helloNode, err := b.CreateNode("HelloNode", func(userInput MyState, currentState MyState, notify func(MyState)) (MyState, error) {
@@ -45,7 +38,7 @@ func main() {
 
 	initialState := MyState{Message: ""}
 	stateMonitorCh := make(chan g.StateMonitorEntry[MyState], 10)
-	graph, err := b.CreateRuntimeWithMergerAndInitialState(startEdge, stateMonitorCh, merge, initialState)
+	graph, err := b.CreateRuntimeWithInitialState(startEdge, stateMonitorCh, initialState)
 	if err != nil {
 		log.Fatalf("Runtime creation failed: %v", err)
 	}
@@ -57,8 +50,8 @@ func main() {
 		log.Fatalf("Graph validation failed: %v", err)
 	}
 
-	newState := MyState{Message: "Bob"}
-	graph.Invoke(newState)
+	userInput := MyState{Message: "Bob"}
+	graph.Invoke(userInput)
 
 	for {
 		entry := <-stateMonitorCh

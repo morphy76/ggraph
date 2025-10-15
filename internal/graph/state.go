@@ -39,8 +39,9 @@ func GraphPartial[T g.SharedState](node string, currentState T) g.StateMonitorEn
 }
 
 // GraphCompleted creates a StateMonitorEntry indicating the completion of the graph processing.
-func GraphCompleted[T g.SharedState](finalState T) g.StateMonitorEntry[T] {
+func GraphCompleted[T g.SharedState](node string, finalState T) g.StateMonitorEntry[T] {
 	return g.StateMonitorEntry[T]{
+		Node:         node,
 		CurrentState: finalState,
 		Running:      false,
 		Partial:      false,

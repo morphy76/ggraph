@@ -46,10 +46,3 @@ func CreateMessage(role MessageRole, content string) Message {
 func CreateModel(messages ...Message) AgentModel {
 	return AgentModel{Messages: messages}
 }
-
-// MergeAgentModel merges two AgentModel instances by concatenating their messages.
-func MergeAgentModel(a, b AgentModel) AgentModel {
-	return AgentModel{
-		Messages: append(a.Messages, b.Messages...),
-	}
-}

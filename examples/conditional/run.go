@@ -16,19 +16,6 @@ type MyState struct {
 	Result int
 }
 
-func merger(current, other MyState) MyState {
-	if current.op != other.op {
-		current.op = other.op
-	}
-	if current.num2 != other.num2 {
-		current.num2 = other.num2
-	}
-	if current.Result != other.Result {
-		current.Result = other.Result
-	}
-	return current
-}
-
 func main() {
 
 	routingPolicy, err := b.CreateConditionalRoutePolicy(func(state MyState, edges []g.Edge[MyState]) g.Edge[MyState] {
@@ -60,7 +47,7 @@ func main() {
 
 	startEdge := b.CreateStartEdge(routerNode)
 	stateMonitorCh := make(chan g.StateMonitorEntry[MyState], 10)
-	myGraph, err := b.CreateRuntimeWithMergerAndInitialState(startEdge, stateMonitorCh, merger, MyState{Result: 10})
+	myGraph, err := b.CreateRuntimeWithInitialState(startEdge, stateMonitorCh, MyState{Result: 10})
 	if err != nil {
 		log.Fatalf("Runtime creation failed: %v", err)
 	}

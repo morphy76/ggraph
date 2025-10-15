@@ -45,30 +45,30 @@ func (n *nodeImpl[T]) Name() string {
 	return n.name
 }
 
-func (n *nodeImpl[T]) Accept(deltaState T, runtime g.StateObserver[T]) {
+func (n *nodeImpl[T]) Accept(userInput T, runtime g.StateObserver[T]) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
 		partialStateChange := func(state T) {
-			runtime.NotifyStateChange(n, state, nil, true)
+			runtime.NotifyStateChange(n, userInput, state, nil, true)
 		}
 
 		select {
 		case asyncDeltaState := <-n.mailbox:
 			updatedState, err := n.fn(asyncDeltaState, runtime.CurrentState(), partialStateChange)
 			if err != nil {
-				runtime.NotifyStateChange(n, updatedState, fmt.Errorf("error executing node %s: %w", n.name, err), false)
+				runtime.NotifyStateChange(n, userInput, runtime.CurrentState(), fmt.Errorf("error executing node %s: %w", n.name, err), false)
 				return
 			}
-			runtime.NotifyStateChange(n, updatedState, nil, false)
+			runtime.NotifyStateChange(n, userInput, updatedState, nil, false)
 		case <-ctx.Done():
-			runtime.NotifyStateChange(n, deltaState, fmt.Errorf("timeout executing node %s: %w", n.name, ctx.Err()), false)
+			runtime.NotifyStateChange(n, userInput, runtime.CurrentState(), fmt.Errorf("timeout executing node %s: %w", n.name, ctx.Err()), false)
 			return
 		}
 	}()
 
-	n.mailbox <- deltaState
+	n.mailbox <- userInput
 }
 
 func (n *nodeImpl[T]) RoutePolicy() g.RoutePolicy[T] {

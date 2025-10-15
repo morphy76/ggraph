@@ -32,7 +32,7 @@ func main() {
 		llm.CreateMessage(llm.System, "You are a helpful cooking assistant. You provide advice, recipes, and tips about cooking. Keep responses concise and friendly."),
 	)
 
-	g, err := b.CreateRuntimeWithMergerAndInitialState(startEdge, stateMonitorCh, llm.MergeAgentModel, initialState)
+	g, err := b.CreateRuntimeWithInitialState(startEdge, stateMonitorCh, initialState)
 	if err != nil {
 		log.Fatalf("Runtime creation failed: %v", err)
 	}

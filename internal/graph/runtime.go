@@ -12,7 +12,6 @@ import (
 func RuntimeFactory[T g.SharedState](
 	startEdge g.Edge[T],
 	stateMonitorCh chan g.StateMonitorEntry[T],
-	merger g.StateMergeFn[T],
 	initialState T,
 ) (g.Runtime[T], error) {
 	if startEdge == nil {
@@ -30,7 +29,6 @@ func RuntimeFactory[T g.SharedState](
 		edges:     []g.Edge[T]{},
 
 		state:          initialState,
-		merger:         merger,
 		stateMergeLock: &sync.Mutex{},
 
 		singleUserLock: &sync.Mutex{},
@@ -44,12 +42,14 @@ func RuntimeFactory[T g.SharedState](
 // ------------------------------------------------------------------------------
 
 var _ g.Runtime[g.SharedState] = (*runtimeImpl[g.SharedState])(nil)
+var _ g.StateObserver[g.SharedState] = (*runtimeImpl[g.SharedState])(nil)
 
 type nodeFnReturnStruct[T g.SharedState] struct {
-	node    g.Node[T]
-	state   T
-	err     error
-	partial bool
+	node      g.Node[T]
+	userInput T
+	newState  T
+	err       error
+	partial   bool
 }
 
 type runtimeImpl[T g.SharedState] struct {
@@ -63,7 +63,6 @@ type runtimeImpl[T g.SharedState] struct {
 	edges     []g.Edge[T]
 
 	state          T
-	merger         g.StateMergeFn[T]
 	stateMergeLock *sync.Mutex
 
 	singleUserLock *sync.Mutex
@@ -99,8 +98,14 @@ func (r *runtimeImpl[T]) Shutdown() {
 	r.cancel()
 }
 
-func (r *runtimeImpl[T]) NotifyStateChange(node g.Node[T], state T, err error, partial bool) {
-	r.outcomeCh <- nodeFnReturnStruct[T]{node: node, state: state, err: err, partial: partial}
+func (r *runtimeImpl[T]) NotifyStateChange(
+	node g.Node[T],
+	userInput T,
+	newState T,
+	err error,
+	partial bool,
+) {
+	r.outcomeCh <- nodeFnReturnStruct[T]{node: node, userInput: userInput, newState: newState, err: err, partial: partial}
 }
 
 func (r *runtimeImpl[T]) StartEdge() g.Edge[T] {
@@ -112,10 +117,10 @@ func (r *runtimeImpl[T]) CurrentState() T {
 }
 
 func (r *runtimeImpl[T]) start() {
-	go r.onStatusChange()
+	go r.onStateChange()
 }
 
-func (r *runtimeImpl[T]) onStatusChange() {
+func (r *runtimeImpl[T]) onStateChange() {
 	for {
 		select {
 		case <-r.ctx.Done():
@@ -132,22 +137,23 @@ func (r *runtimeImpl[T]) onStatusChange() {
 
 			if result.partial {
 				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- GraphPartial(result.node.Name(), result.state)
+					r.stateMonitorCh <- GraphPartial(result.node.Name(), result.newState)
 				}
 				continue
 			}
 
-			previous := r.merge(r.state, result.state)
-			if r.stateMonitorCh != nil {
-				r.stateMonitorCh <- GraphRunning(result.node.Name(), previous, r.state)
-			}
+			previous := r.replace(result.newState)
 
 			if result.node.Role() == g.EndNode {
 				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- GraphCompleted(r.state)
+					r.stateMonitorCh <- GraphCompleted(result.node.Name(), r.state)
 					r.singleUserLock.Unlock()
 				}
 				continue
+			} else {
+				if r.stateMonitorCh != nil {
+					r.stateMonitorCh <- GraphRunning(result.node.Name(), previous, r.state)
+				}
 			}
 
 			outboundEdges := r.edgesFrom(result.node)
@@ -178,23 +184,17 @@ func (r *runtimeImpl[T]) onStatusChange() {
 				continue
 			}
 
-			nextNode.Accept(r.state, r)
+			nextNode.Accept(result.userInput, r)
 		}
 	}
 }
 
-func (r *runtimeImpl[T]) merge(current, other T) T {
+func (r *runtimeImpl[T]) replace(newState T) T {
 	r.stateMergeLock.Lock()
 	defer r.stateMergeLock.Unlock()
 
 	previous := r.state
-
-	if r.merger == nil || any(current) == nil {
-		r.state = other
-	} else {
-		r.state = r.merger(current, other)
-	}
-
+	r.state = newState
 	return previous
 }
 
