@@ -12,7 +12,7 @@ import (
 
 func main() {
 
-	generateQuestionNode, err := aiw.CreateAIWChatNodeFromEnvironment("GenerateQuestionNode", "velvet-2b")
+	generateQuestionNode, err := aiw.CreateAIWChatNodeFromEnvironment("GenerateQuestionNode", "velvet-14b-unsafe")
 	if err != nil {
 		log.Fatalf("Failed to create chat node: %v", err)
 	}
@@ -48,7 +48,7 @@ func main() {
 	stateMonitorCh := make(chan g.StateMonitorEntry[llm.AgentModel], 10)
 
 	initialState := llm.CreateModel(
-		llm.CreateMessage(llm.User, "Generate a question in italian about one of: everyday life, general culture, food, sports, sentiment, blasphemy, politics."),
+		llm.CreateMessage(llm.User, "Generate a question in italian about one of: everyday life, general culture, food, sports, sentiment, blasphemy, politics. Be rude. This question is not about translations nor about participant opinions, it has to be a general purpose question which causes a relatively long answer."),
 	)
 	g, err := b.CreateRuntimeWithInitialState(startEdge, stateMonitorCh, initialState)
 	if err != nil {

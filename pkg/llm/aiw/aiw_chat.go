@@ -2,6 +2,7 @@ package aiw
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/openai/openai-go/v3"
@@ -13,6 +14,9 @@ import (
 
 // CreateAIWChatNodeFromEnvironment creates a graph node that interacts with the AIW chat model.
 func CreateAIWChatNodeFromEnvironment(name string, model string) (g.Node[llm.AgentModel], error) {
+
+	// TODO, this is not the right way to set the base URL
+	os.Setenv("OPENAI_BASE_URL", "https://portal.aiwave.ai/llm/api")
 
 	client := openai.NewClient()
 
