@@ -10,7 +10,10 @@ type Connected[T SharedState] interface {
 
 // Runtime represents the runtime environment for graph processing.
 type Runtime[T SharedState] interface {
+	// Embeds Connected interface to provide graph connectivity methods.
 	Connected[T]
+	// Embeds Persistent interface to provide state persistence methods.
+	Persistent[T]
 	// Invoke executes the graph processing with the given user input.
 	Invoke(userInput T)
 	// TODO invoke with context

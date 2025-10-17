@@ -15,6 +15,16 @@ func GraphRunning[T g.SharedState](node string, previousState, currentState T) g
 	}
 }
 
+// GraphNonFatalError creates a StateMonitorEntry indicating a non-fatal error in the graph processing.
+func GraphNonFatalError[T g.SharedState](node string, err error) g.StateMonitorEntry[T] {
+	return g.StateMonitorEntry[T]{
+		Node:    node,
+		Error:   err,
+		Running: true,
+		Partial: false,
+	}
+}
+
 // GraphError creates a StateMonitorEntry indicating an error in the graph processing.
 func GraphError[T g.SharedState](node string, currentState T, err error) g.StateMonitorEntry[T] {
 	return g.StateMonitorEntry[T]{

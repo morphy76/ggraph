@@ -1,5 +1,9 @@
 package graph
 
+import (
+	"github.com/google/uuid"
+)
+
 // NotifyPartialFn defines a function type for notifying partial state updates.
 type NotifyPartialFn[T SharedState] func(newState T)
 
@@ -15,4 +19,23 @@ type StateObserver[T SharedState] interface {
 	NotifyStateChange(node Node[T], userInput T, newState T, err error, partial bool)
 	// CurrentState returns the current state of the observer.
 	CurrentState() T
+}
+
+// PersistFn defines a function type for persisting the state.
+type PersistFn[T SharedState] func(state T) error
+
+// RestoreFn defines a function type for restoring the state.
+type RestoreFn[T SharedState] func() (T, error)
+
+// Persistent is an interface for managing persistent state in the graph runtime.
+type Persistent[T SharedState] interface {
+	// SetPersistentState sets up the persistent state management with the provided writer, reader, and runtime ID.
+	SetPersistentState(
+		persist PersistFn[T],
+		restore RestoreFn[T],
+		runtimeID uuid.UUID,
+	)
+
+	// Restore restores the state from persistent storage.
+	Restore() error
 }

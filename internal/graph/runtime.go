@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/google/uuid"
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
 
@@ -66,6 +67,10 @@ type runtimeImpl[T g.SharedState] struct {
 	stateMergeLock *sync.Mutex
 
 	executing atomic.Bool
+
+	identity  uuid.UUID
+	persistFn g.PersistFn[T]
+	restoreFn g.RestoreFn[T]
 }
 
 func (r *runtimeImpl[T]) Invoke(userInput T) {
@@ -125,6 +130,49 @@ func (r *runtimeImpl[T]) CurrentState() T {
 	return r.state
 }
 
+func (r *runtimeImpl[T]) SetPersistentState(
+	persist g.PersistFn[T],
+	restore g.RestoreFn[T],
+	runtimeID uuid.UUID,
+) {
+	r.persistFn = persist
+	r.restoreFn = restore
+	r.identity = runtimeID
+}
+
+func (r *runtimeImpl[T]) Restore() error {
+	if r.restoreFn == nil {
+		return fmt.Errorf("restore function is not set")
+	}
+	if r.identity == uuid.Nil {
+		return fmt.Errorf("runtime identity is not set")
+	}
+	restoredState, err := r.restoreFn()
+	if err != nil {
+		return fmt.Errorf("state restoration failed: %w", err)
+	}
+	r.stateMergeLock.Lock()
+	r.state = restoredState
+	r.stateMergeLock.Unlock()
+	return nil
+}
+
+func (r *runtimeImpl[T]) persistState() error {
+	if r.persistFn == nil {
+		return nil
+	}
+	if r.identity == uuid.Nil {
+		return fmt.Errorf("runtime identity is not set")
+	}
+	r.stateMergeLock.Lock()
+	currentState := r.state
+	r.stateMergeLock.Unlock()
+	if err := r.persistFn(currentState); err != nil {
+		return fmt.Errorf("state persistence failed: %w", err)
+	}
+	return nil
+}
+
 func (r *runtimeImpl[T]) start() {
 	go r.onStateChange()
 }
@@ -152,6 +200,12 @@ func (r *runtimeImpl[T]) onStateChange() {
 			}
 
 			previous := r.replace(result.newState)
+			err := r.persistState()
+			if err != nil {
+				if r.stateMonitorCh != nil {
+					r.stateMonitorCh <- GraphNonFatalError[T](result.node.Name(), fmt.Errorf("state persistence error: %w", err))
+				}
+			}
 
 			if result.node.Role() == g.EndNode {
 				if r.stateMonitorCh != nil {
