@@ -1,6 +1,8 @@
 package graph
 
 import (
+	"context"
+
 	"github.com/google/uuid"
 )
 
@@ -21,11 +23,9 @@ type StateObserver[T SharedState] interface {
 	CurrentState() T
 }
 
-// PersistFn defines a function type for persisting the state.
-type PersistFn[T SharedState] func(state T) error
+type PersistFn[T SharedState] func(ctx context.Context, runtimeID uuid.UUID, state T) error
 
-// RestoreFn defines a function type for restoring the state.
-type RestoreFn[T SharedState] func() (T, error)
+type RestoreFn[T SharedState] func(ctx context.Context, runtimeID uuid.UUID) (T, error)
 
 // Persistent is an interface for managing persistent state in the graph runtime.
 type Persistent[T SharedState] interface {

@@ -32,9 +32,12 @@ func RuntimeFactory[T g.SharedState](
 
 		state:          initialState,
 		stateMergeLock: &sync.Mutex{},
+
+		pendingPersist: make(chan T, 10),
 	}
 	rv.executing.Store(false)
 	rv.start()
+	rv.startPersistenceWorker()
 	return rv, nil
 }
 
@@ -68,9 +71,13 @@ type runtimeImpl[T g.SharedState] struct {
 
 	executing atomic.Bool
 
-	identity  uuid.UUID
-	persistFn g.PersistFn[T]
-	restoreFn g.RestoreFn[T]
+	identity       uuid.UUID
+	persistFn      g.PersistFn[T]
+	restoreFn      g.RestoreFn[T]
+	lastPersisted  T
+	persistLock    sync.RWMutex
+	pendingPersist chan T
+	persistWg      sync.WaitGroup
 }
 
 func (r *runtimeImpl[T]) Invoke(userInput T) {
@@ -108,6 +115,7 @@ func (r *runtimeImpl[T]) Validate() error {
 
 func (r *runtimeImpl[T]) Shutdown() {
 	r.cancel()
+	r.persistWg.Wait()
 }
 
 func (r *runtimeImpl[T]) NotifyStateChange(
@@ -147,13 +155,16 @@ func (r *runtimeImpl[T]) Restore() error {
 	if r.identity == uuid.Nil {
 		return fmt.Errorf("runtime identity is not set")
 	}
-	restoredState, err := r.restoreFn()
+	restoredState, err := r.restoreFn(r.ctx, r.identity)
 	if err != nil {
 		return fmt.Errorf("state restoration failed: %w", err)
 	}
 	r.stateMergeLock.Lock()
 	r.state = restoredState
 	r.stateMergeLock.Unlock()
+	r.persistLock.Lock()
+	r.lastPersisted = restoredState
+	r.persistLock.Unlock()
 	return nil
 }
 
@@ -167,9 +178,20 @@ func (r *runtimeImpl[T]) persistState() error {
 	r.stateMergeLock.Lock()
 	currentState := r.state
 	r.stateMergeLock.Unlock()
-	if err := r.persistFn(currentState); err != nil {
-		return fmt.Errorf("state persistence failed: %w", err)
+
+	r.persistLock.RLock()
+	lastPersisted := r.lastPersisted
+	r.persistLock.RUnlock()
+
+	if r.statesEqual(currentState, lastPersisted) {
+		return nil
 	}
+
+	select {
+	case r.pendingPersist <- currentState:
+	default:
+	}
+
 	return nil
 }
 
@@ -306,4 +328,50 @@ func (r *runtimeImpl[T]) hasPathToEndEdge(node g.Node[T], visited map[string]boo
 	}
 
 	return false
+}
+
+func (r *runtimeImpl[T]) startPersistenceWorker() {
+	r.persistWg.Add(1)
+	go r.persistenceWorker()
+}
+
+func (r *runtimeImpl[T]) persistenceWorker() {
+	defer r.persistWg.Done()
+
+	for {
+		select {
+		case <-r.ctx.Done():
+			r.flushPendingStates()
+			return
+		case state := <-r.pendingPersist:
+			if err := r.persistFn(r.ctx, r.identity, state); err != nil {
+				if r.stateMonitorCh != nil {
+					r.stateMonitorCh <- GraphNonFatalError[T]("Persistence", fmt.Errorf("state persistence error: %w", err))
+				}
+			} else {
+				r.persistLock.Lock()
+				r.lastPersisted = state
+				r.persistLock.Unlock()
+			}
+		}
+	}
+}
+
+func (r *runtimeImpl[T]) flushPendingStates() {
+	for {
+		select {
+		case state := <-r.pendingPersist:
+			if err := r.persistFn(r.ctx, r.identity, state); err != nil {
+				if r.stateMonitorCh != nil {
+					r.stateMonitorCh <- GraphNonFatalError[T]("Persistence", fmt.Errorf("state persistence error during flush: %w", err))
+				}
+			}
+		default:
+			return
+		}
+	}
+}
+
+func (r *runtimeImpl[T]) statesEqual(a, b T) bool {
+	return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
 }

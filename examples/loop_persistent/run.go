@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
 	"os"
+	"path/filepath"
 
 	"github.com/google/uuid"
 	b "github.com/morphy76/ggraph/pkg/builders"
@@ -24,37 +26,44 @@ type GameState struct {
 	High    int
 }
 
-// FilePersistence implements simple file-based persistence for the game state
 type FilePersistence struct {
-	filepath  string
-	runtimeID uuid.UUID
+	baseDir string
 }
 
-func NewFilePersistence(filepath string) *FilePersistence {
+func NewFilePersistence(baseDir string) *FilePersistence {
+	if err := os.MkdirAll(baseDir, 0755); err != nil {
+		log.Printf("Failed to create base directory: %v", err)
+	}
 	return &FilePersistence{
-		filepath: filepath,
+		baseDir: baseDir,
 	}
 }
 
-// Persist writes the state to a JSON file
-func (fp *FilePersistence) Persist(state GameState) error {
+func (fp *FilePersistence) getFilePath(runtimeID uuid.UUID) string {
+	return filepath.Join(fp.baseDir, fmt.Sprintf("game_state_%s.json", runtimeID.String()))
+}
+
+func (fp *FilePersistence) Persist(ctx context.Context, runtimeID uuid.UUID, state GameState) error {
+	filePath := fp.getFilePath(runtimeID)
+
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal state: %w", err)
 	}
 
-	err = os.WriteFile(fp.filepath, data, 0644)
+	err = os.WriteFile(filePath, data, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write state file: %w", err)
 	}
 
-	fmt.Printf("💾 State persisted to %s\n", fp.filepath)
+	fmt.Printf("💾 State persisted to %s\n", filePath)
 	return nil
 }
 
-// Restore reads the state from a JSON file
-func (fp *FilePersistence) Restore() (GameState, error) {
-	data, err := os.ReadFile(fp.filepath)
+func (fp *FilePersistence) Restore(ctx context.Context, runtimeID uuid.UUID) (GameState, error) {
+	filePath := fp.getFilePath(runtimeID)
+
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return GameState{}, fmt.Errorf("no saved state found: %w", err)
@@ -68,13 +77,13 @@ func (fp *FilePersistence) Restore() (GameState, error) {
 		return GameState{}, fmt.Errorf("failed to unmarshal state: %w", err)
 	}
 
-	fmt.Printf("📂 State restored from %s\n", fp.filepath)
+	fmt.Printf("📂 State restored from %s\n", filePath)
 	return state, nil
 }
 
 func main() {
-	stateFile := "game_state.json"
-	persistence := NewFilePersistence(stateFile)
+	stateDir := "game_states"
+	persistence := NewFilePersistence(stateDir)
 
 	// Node 1: Determine target number
 	initNode, _ := b.CreateNode("InitNode", func(userInput GameState, currentState GameState, notifyPartial g.NotifyPartialFn[GameState]) (GameState, error) {
@@ -175,7 +184,7 @@ func main() {
 			if entry.Error == nil {
 				fmt.Printf("✅ Success! Target was %d, found in %d tries\n", entry.CurrentState.Target, entry.CurrentState.Tries)
 				fmt.Printf("\n💡 Try running this example again to see persistence in action!\n")
-				fmt.Printf("   The state is saved at each step in: %s\n", stateFile)
+				fmt.Printf("   The state is saved asynchronously in: %s/\n", stateDir)
 			} else {
 				fmt.Printf("❌ Error: %v\n", entry.Error)
 			}
