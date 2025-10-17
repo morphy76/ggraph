@@ -24,7 +24,7 @@ func CreateRouter[T g.SharedState](name string, policy g.RoutePolicy[T]) (g.Node
 }
 
 // CreateNodeWithRoutingPolicy creates a new instance of Node with the specified SharedState type and routing policy.
-func CreateNodeWithRoutingPolicy[T g.SharedState](name string, fn g.NodeFunc[T], policy g.RoutePolicy[T]) (g.Node[T], error) {
+func CreateNodeWithRoutingPolicy[T g.SharedState](name string, fn g.NodeFn[T], policy g.RoutePolicy[T]) (g.Node[T], error) {
 	if name == "" {
 		return nil, fmt.Errorf("node creation failed: name cannot be empty")
 	}
@@ -32,7 +32,7 @@ func CreateNodeWithRoutingPolicy[T g.SharedState](name string, fn g.NodeFunc[T],
 }
 
 // CreateNode creates a new instance of Node with the specified SharedState type.
-func CreateNode[T g.SharedState](name string, fn g.NodeFunc[T]) (g.Node[T], error) {
+func CreateNode[T g.SharedState](name string, fn g.NodeFn[T]) (g.Node[T], error) {
 	policy, err := CreateAnyRoutePolicy[T]()
 	if err != nil {
 		return nil, err

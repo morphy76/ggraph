@@ -15,7 +15,7 @@ import (
 func CreateOpenAIChatNodeFromEnvironment(name string, model string) (g.Node[llm.AgentModel], error) {
 	client := openai.NewClient()
 
-	chatFunction := func(userInput, currentState llm.AgentModel, notify func(llm.AgentModel)) (llm.AgentModel, error) {
+	chatFunction := func(userInput, currentState llm.AgentModel, notifyPartial g.NotifyPartialFn[llm.AgentModel]) (llm.AgentModel, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
@@ -30,7 +30,7 @@ func CreateOpenAIChatNodeFromEnvironment(name string, model string) (g.Node[llm.
 			chunk := stream.Current()
 			acc.AddChunk(chunk)
 			if len(chunk.Choices) > 0 {
-				notify(llm.AgentModel{
+				notifyPartial(llm.AgentModel{
 					Messages: []llm.Message{{Role: llm.Assistant, Content: chunk.Choices[0].Delta.Content}},
 				})
 			}

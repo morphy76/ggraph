@@ -16,7 +16,7 @@ type MyState struct {
 
 func main() {
 
-	helloNode, err := b.CreateNode("HelloNode", func(userInput MyState, currentState MyState, notify func(MyState)) (MyState, error) {
+	helloNode, err := b.CreateNode("HelloNode", func(userInput MyState, currentState MyState, notifyPartial g.NotifyPartialFn[MyState]) (MyState, error) {
 		currentState.Message = fmt.Sprintf("Hello %s!!!", userInput.Message)
 		return currentState, nil
 	})
@@ -24,7 +24,7 @@ func main() {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
-	goodbyeNode, err := b.CreateNode("GoodbyeNode", func(userInput MyState, currentState MyState, notify func(MyState)) (MyState, error) {
+	goodbyeNode, err := b.CreateNode("GoodbyeNode", func(userInput MyState, currentState MyState, notifyPartial g.NotifyPartialFn[MyState]) (MyState, error) {
 		currentState.Message = fmt.Sprintf("Goodbye %s!!!", userInput.Message)
 		return currentState, nil
 	})

@@ -32,7 +32,7 @@ func main() {
 		log.Fatalf("Router creation failed: %v", err)
 	}
 
-	adder, err := b.CreateNode("Adder", func(userInput MyState, currentState MyState, notify func(MyState)) (MyState, error) {
+	adder, err := b.CreateNode("Adder", func(userInput MyState, currentState MyState, notifyPartial g.NotifyPartialFn[MyState]) (MyState, error) {
 		currentState.Result = currentState.Result + userInput.num2
 		return currentState, nil
 	})
@@ -40,7 +40,7 @@ func main() {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
-	subtractor, err := b.CreateNode("Subtractor", func(userInput MyState, currentState MyState, notify func(MyState)) (MyState, error) {
+	subtractor, err := b.CreateNode("Subtractor", func(userInput MyState, currentState MyState, notifyPartial g.NotifyPartialFn[MyState]) (MyState, error) {
 		currentState.Result = currentState.Result - userInput.num2
 		return currentState, nil
 	})

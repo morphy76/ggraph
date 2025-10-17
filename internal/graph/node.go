@@ -9,10 +9,10 @@ import (
 )
 
 // NodeImplFactory creates a new instance of Node with the specified SharedState type.
-func NodeImplFactory[T g.SharedState](name string, fn g.NodeFunc[T], routePolicy g.RoutePolicy[T], role g.NodeRole) g.Node[T] {
+func NodeImplFactory[T g.SharedState](name string, fn g.NodeFn[T], routePolicy g.RoutePolicy[T], role g.NodeRole) g.Node[T] {
 	useFn := fn
 	if useFn == nil {
-		useFn = func(userInput T, currentState T, notify func(T)) (T, error) {
+		useFn = func(userInput T, currentState T, notifyPartial g.NotifyPartialFn[T]) (T, error) {
 			return currentState, nil
 		}
 	}
@@ -39,7 +39,7 @@ type nodeImpl[T g.SharedState] struct {
 	mailbox chan T
 
 	name        string
-	fn          g.NodeFunc[T]
+	fn          g.NodeFn[T]
 	routePolicy g.RoutePolicy[T]
 
 	role g.NodeRole

@@ -23,7 +23,7 @@ type GameState struct {
 
 func main() {
 	// Node 1: Determine target number
-	initNode, _ := b.CreateNode("InitNode", func(userInput GameState, currentState GameState, notify func(GameState)) (GameState, error) {
+	initNode, _ := b.CreateNode("InitNode", func(userInput GameState, currentState GameState, notifyPartial g.NotifyPartialFn[GameState]) (GameState, error) {
 		currentState.Target = rand.Intn(100) + 1
 		currentState.Tries = 0
 		currentState.Low = 1
@@ -33,7 +33,7 @@ func main() {
 	})
 
 	// Node 2: Make a guess using binary search
-	guessNode, _ := b.CreateNode("GuessNode", func(userInput GameState, currentState GameState, notify func(GameState)) (GameState, error) {
+	guessNode, _ := b.CreateNode("GuessNode", func(userInput GameState, currentState GameState, notifyPartial g.NotifyPartialFn[GameState]) (GameState, error) {
 		currentState.Tries++
 		currentState.Guess = (currentState.Low + currentState.High) / 2
 		currentState.Success = (currentState.Guess == currentState.Target)
@@ -42,7 +42,7 @@ func main() {
 	})
 
 	// Node 3: Provide hint and adjust range
-	hintNode, _ := b.CreateNode("HintNode", func(userInput GameState, currentState GameState, notify func(GameState)) (GameState, error) {
+	hintNode, _ := b.CreateNode("HintNode", func(userInput GameState, currentState GameState, notifyPartial g.NotifyPartialFn[GameState]) (GameState, error) {
 		if currentState.Guess < currentState.Target {
 			currentState.Low = currentState.Guess + 1
 			currentState.Hint = "higher"

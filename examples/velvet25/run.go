@@ -16,7 +16,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create chat node: %v", err)
 	}
-	transformQuestionNode, err := b.CreateNode("AskNode", func(userInput, currentState llm.AgentModel, notify func(llm.AgentModel)) (llm.AgentModel, error) {
+	transformQuestionNode, err := b.CreateNode("AskNode", func(userInput, currentState llm.AgentModel, notifyPartial g.NotifyPartialFn[llm.AgentModel]) (llm.AgentModel, error) {
 		return llm.CreateModel(
 			llm.CreateMessage(llm.User, currentState.Messages[len(currentState.Messages)-1].Content),
 		), nil
@@ -29,7 +29,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create chat node: %v", err)
 	}
-	transformAnswerForEvaluationNode, err := b.CreateNode("TransformForEvalNode", func(userInput, currentState llm.AgentModel, notify func(llm.AgentModel)) (llm.AgentModel, error) {
+	transformAnswerForEvaluationNode, err := b.CreateNode("TransformForEvalNode", func(userInput, currentState llm.AgentModel, notifyPartial g.NotifyPartialFn[llm.AgentModel]) (llm.AgentModel, error) {
 		return llm.CreateModel(
 			llm.CreateMessage(llm.System, "As an expert data scientist, who wants to evaluate a large language model in italian, you have to evaluate if the answer given by the model is correct or not. Provide in a json form the following fields: user question, model answer, verdict (true or false), explanation of the verdict in italian."),
 			llm.CreateMessage(llm.User, fmt.Sprintf("Evaluate the answer in terms of syntaxt, grammar, or any other lexical criteria in a concise way. Question is [%s]; Answer is [%s].", currentState.Messages[len(currentState.Messages)-2].Content, currentState.Messages[len(currentState.Messages)-1].Content)),

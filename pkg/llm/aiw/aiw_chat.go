@@ -20,7 +20,7 @@ func CreateAIWChatNodeFromEnvironment(name string, model string) (g.Node[llm.Age
 
 	client := openai.NewClient()
 
-	chatFunction := func(userInput, currentState llm.AgentModel, notify func(llm.AgentModel)) (llm.AgentModel, error) {
+	chatFunction := func(userInput, currentState llm.AgentModel, notifyPartial g.NotifyPartialFn[llm.AgentModel]) (llm.AgentModel, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
