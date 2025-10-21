@@ -138,9 +138,6 @@ func main() {
 		log.Fatalf("Router creation failed: %v", err)
 	}
 
-	// End node for success
-	endNode := b.CreateEndNode[GameState]()
-
 	// Build graph
 	startEdge := b.CreateStartEdge(initNode)
 	stateMonitorCh := make(chan g.StateMonitorEntry[GameState], 10)
@@ -152,8 +149,7 @@ func main() {
 		b.CreateEdge(guessNode, router),
 		b.CreateEdge(router, hintNode, map[string]string{"path": "fail"}),
 		b.CreateEdge(hintNode, guessNode), // Loop back
-		b.CreateEdge(router, endNode, map[string]string{"path": "success"}),
-		b.CreateEndEdge(endNode),
+		b.CreateEndEdge(router, map[string]string{"path": "success"}),
 	)
 
 	if err := runtime.Validate(); err != nil {

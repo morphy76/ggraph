@@ -6,36 +6,194 @@ import (
 	"github.com/google/uuid"
 )
 
-// NotifyPartialFn defines a function type for notifying partial state updates.
+// NotifyPartialFn is a callback function for sending partial state updates during node execution.
+//
+// When a node's processing takes significant time or produces incremental results,
+// it can call this function to emit partial state updates before the final result.
+// This enables streaming responses, progress tracking, and responsive user interfaces.
+//
+// The partial state updates are delivered through the state monitoring channel with
+// the Partial flag set to true.
+//
+// Example usage within a node function:
+//
+//	func processData(userInput MyState, currentState MyState, notify NotifyPartialFn[MyState]) (MyState, error) {
+//	    for i := 0; i < 10; i++ {
+//	        currentState.Progress = i * 10
+//	        notify(currentState) // Send partial update
+//	        // ... do some work ...
+//	    }
+//	    currentState.Progress = 100
+//	    return currentState, nil
+//	}
 type NotifyPartialFn[T SharedState] func(newState T)
 
-// NodeFn defines a function type that processes a node with the given SharedState type.
+// NodeFn is a function that implements the logic executed when a node is reached.
+//
+// This is the core processing function for operational nodes in the graph. It receives
+// the original user input, the current state, and a notification function for partial
+// updates. The function should process the state and return the updated state along
+// with any error that occurred.
+//
+// Parameters:
+//   - userInput: The original input provided to Runtime.Invoke(), unchanged throughout execution.
+//   - currentState: The current state at the time this node executes, potentially modified
+//     by previous nodes in the execution path.
+//   - notify: A callback function to send partial state updates during processing.
+//
+// Returns:
+//   - The updated state after processing.
+//   - An error if processing failed, which will halt graph execution.
+//
+// Example:
+//
+//	func myNodeFunction(userInput MyState, currentState MyState, notify NotifyPartialFn[MyState]) (MyState, error) {
+//	    currentState.Counter++
+//	    currentState.Message = fmt.Sprintf("Processed: %s", userInput.Request)
+//	    return currentState, nil
+//	}
 type NodeFn[T SharedState] func(userInput T, currentState T, notify NotifyPartialFn[T]) (T, error)
 
-// EdgeSelectionFn defines a function type for conditional routing based on the current state and available edges.
+// EdgeSelectionFn is a function that determines which edge to follow during graph execution.
+//
+// This function implements the routing logic for conditional branching, loops, and
+// dynamic path selection. It examines the user input, current state, and available
+// outgoing edges to decide which edge the execution should follow next.
+//
+// Parameters:
+//   - userInput: The original input provided to Runtime.Invoke().
+//   - currentState: The current state at the time of routing decision.
+//   - edges: All available outgoing edges from the current node.
+//
+// Returns:
+//   - The Edge to follow. Must be one of the edges from the provided slice.
+//
+// Example:
+//
+//	func routingLogic(userInput MyState, currentState MyState, edges []Edge[MyState]) Edge[MyState] {
+//	    if currentState.Counter > 10 {
+//	        return edges[0] // Exit edge
+//	    }
+//	    return edges[1] // Loop back edge
+//	}
 type EdgeSelectionFn[T SharedState] func(userInput T, currentState T, edges []Edge[T]) Edge[T]
 
-// StateObserver is an interface for observing state changes in nodes during graph processing.
+// StateObserver is an internal interface for tracking state changes during graph execution.
+//
+// This interface is primarily used by the runtime to monitor and record state transitions
+// as nodes execute. It provides the mechanism for the state monitoring channel to receive
+// updates about graph execution progress.
+//
+// Most users will not need to implement this interface directly; it is used internally
+// by the runtime implementation.
 type StateObserver[T SharedState] interface {
-	// NotifyStateChange is called when a node changes state during processing.
+	// NotifyStateChange is called whenever a node modifies the state.
+	//
+	// Parameters:
+	//   - node: The node that produced the state change.
+	//   - userInput: The original user input to the graph.
+	//   - newState: The new state after the node's execution.
+	//   - err: Any error that occurred during node execution.
+	//   - partial: true if this is a partial update, false if final.
 	NotifyStateChange(node Node[T], userInput T, newState T, err error, partial bool)
-	// CurrentState returns the current state of the observer.
+
+	// CurrentState returns the current state of the graph execution.
 	CurrentState() T
 }
 
+// PersistFn is a function that saves the current state to persistent storage.
+//
+// This function is called by the runtime to persist state to external storage
+// (database, file system, etc.), enabling stateful workflows that can be resumed
+// after interruption or across multiple execution sessions.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeout control.
+//   - runtimeID: Unique identifier for this runtime instance.
+//   - state: The current state to persist.
+//
+// Returns:
+//   - An error if the persistence operation fails.
+//
+// Example:
+//
+//	func persistState(ctx context.Context, runtimeID uuid.UUID, state MyState) error {
+//	    data, err := json.Marshal(state)
+//	    if err != nil {
+//	        return err
+//	    }
+//	    return db.Save(ctx, runtimeID.String(), data)
+//	}
 type PersistFn[T SharedState] func(ctx context.Context, runtimeID uuid.UUID, state T) error
 
+// RestoreFn is a function that retrieves previously persisted state from storage.
+//
+// This function is called by the runtime to restore state from external storage,
+// allowing workflows to resume from where they left off. It should return the
+// most recently persisted state for the given runtime ID.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeout control.
+//   - runtimeID: Unique identifier for the runtime instance to restore.
+//
+// Returns:
+//   - The restored state.
+//   - An error if the restoration operation fails.
+//
+// Example:
+//
+//	func restoreState(ctx context.Context, runtimeID uuid.UUID) (MyState, error) {
+//	    data, err := db.Load(ctx, runtimeID.String())
+//	    if err != nil {
+//	        return MyState{}, err
+//	    }
+//	    var state MyState
+//	    err = json.Unmarshal(data, &state)
+//	    return state, err
+//	}
 type RestoreFn[T SharedState] func(ctx context.Context, runtimeID uuid.UUID) (T, error)
 
-// Persistent is an interface for managing persistent state in the graph runtime.
+// Persistent is an interface for managing state persistence in graph workflows.
+//
+// This interface enables stateful graph execution that can survive process restarts,
+// handle long-running workflows, and implement checkpoint/resume patterns. It is
+// embedded in the Runtime interface to provide persistence capabilities.
 type Persistent[T SharedState] interface {
-	// SetPersistentState sets up the persistent state management with the provided writer, reader, and runtime ID.
+	// SetPersistentState configures the persistence mechanism for the runtime.
+	//
+	// This method must be called before invoking the graph if persistence is desired.
+	// It sets up the functions that will be used to save and restore state, along
+	// with a unique runtime ID that identifies this execution session.
+	//
+	// Parameters:
+	//   - persist: Function to save state to storage.
+	//   - restore: Function to load state from storage.
+	//   - runtimeID: Unique identifier for this runtime instance.
+	//
+	// Example:
+	//
+	//	runtimeID := uuid.New()
+	//	runtime.SetPersistentState(persistState, restoreState, runtimeID)
 	SetPersistentState(
 		persist PersistFn[T],
 		restore RestoreFn[T],
 		runtimeID uuid.UUID,
 	)
 
-	// Restore restores the state from persistent storage.
+	// Restore loads and applies previously persisted state to the runtime.
+	//
+	// This method should be called before Invoke() to restore the state from
+	// a previous execution session. It uses the RestoreFn provided in
+	// SetPersistentState to retrieve the state from storage.
+	//
+	// Returns:
+	//   - An error if the restoration fails.
+	//
+	// Example:
+	//
+	//	if err := runtime.Restore(); err != nil {
+	//	    log.Printf("Failed to restore state: %v", err)
+	//	}
+	//	runtime.Invoke(userInput)
 	Restore() error
 }
