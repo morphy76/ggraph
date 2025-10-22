@@ -79,7 +79,7 @@ func main() {
 
 			if entry.Partial {
 				wasStreaming = true
-				currentState = entry.CurrentState
+				currentState = entry.StateChange
 				messages := currentState.Messages
 				if len(messages) > 0 {
 					lastMsg := messages[len(messages)-1]
@@ -93,7 +93,7 @@ func main() {
 				if wasStreaming {
 					fmt.Printf("\n\n")
 				} else {
-					currentState = entry.CurrentState
+					currentState = entry.StateChange
 					messages := currentState.Messages
 					if len(messages) > 0 {
 						lastMsg := messages[len(messages)-1]

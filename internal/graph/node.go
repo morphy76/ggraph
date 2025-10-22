@@ -9,23 +9,24 @@ import (
 )
 
 // NodeImplFactory creates a new instance of Node with the specified SharedState type.
-func NodeImplFactory[T g.SharedState](name string, fn g.NodeFn[T], routePolicy g.RoutePolicy[T], role g.NodeRole) g.Node[T] {
+func NodeImplFactory[T g.SharedState](role g.NodeRole, name string, fn g.NodeFn[T], routePolicy g.RoutePolicy[T], reducer g.ReducerFn[T]) g.Node[T] {
 	useFn := fn
 	if useFn == nil {
 		useFn = func(userInput T, currentState T, notifyPartial g.NotifyPartialFn[T]) (T, error) {
 			return currentState, nil
 		}
 	}
-	usePloicy := routePolicy
-	if usePloicy == nil {
-		usePloicy, _ = RouterPolicyImplFactory[T](AnyRoute)
+	usePolicy := routePolicy
+	if usePolicy == nil {
+		usePolicy, _ = RouterPolicyImplFactory[T](AnyRoute)
 	}
 	return &nodeImpl[T]{
 		mailbox:     make(chan T, 100),
 		name:        name,
 		fn:          useFn,
-		routePolicy: usePloicy,
+		routePolicy: usePolicy,
 		role:        role,
+		reducer:     reducer,
 	}
 }
 
@@ -43,6 +44,8 @@ type nodeImpl[T g.SharedState] struct {
 	routePolicy g.RoutePolicy[T]
 
 	role g.NodeRole
+
+	reducer g.ReducerFn[T]
 }
 
 func (n *nodeImpl[T]) Name() string {
@@ -55,19 +58,19 @@ func (n *nodeImpl[T]) Accept(userInput T, runtime g.StateObserver[T]) {
 		defer cancel()
 
 		partialStateChange := func(state T) {
-			runtime.NotifyStateChange(n, userInput, state, nil, true)
+			runtime.NotifyStateChange(n, userInput, state, n.reducer, nil, true)
 		}
 
 		select {
 		case asyncDeltaState := <-n.mailbox:
-			updatedState, err := n.fn(asyncDeltaState, runtime.CurrentState(), partialStateChange)
+			stateChange, err := n.fn(asyncDeltaState, runtime.CurrentState(), partialStateChange)
 			if err != nil {
-				runtime.NotifyStateChange(n, userInput, runtime.CurrentState(), fmt.Errorf("error executing node %s: %w", n.name, err), false)
+				runtime.NotifyStateChange(n, userInput, stateChange, n.reducer, fmt.Errorf("error executing node %s: %w", n.name, err), false)
 				return
 			}
-			runtime.NotifyStateChange(n, userInput, updatedState, nil, false)
+			runtime.NotifyStateChange(n, userInput, stateChange, n.reducer, nil, false)
 		case <-ctx.Done():
-			runtime.NotifyStateChange(n, userInput, runtime.CurrentState(), fmt.Errorf("timeout executing node %s: %w", n.name, ctx.Err()), false)
+			runtime.NotifyStateChange(n, userInput, runtime.CurrentState(), n.reducer, fmt.Errorf("timeout executing node %s: %w", n.name, ctx.Err()), false)
 			return
 		}
 	}()

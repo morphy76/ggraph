@@ -49,9 +49,10 @@ func CreateEdge[T g.SharedState](from, to g.Node[T], labels ...map[string]string
 // Example:
 //
 //	firstNode, _ := CreateNode[MyState]("first", myFunction)
-//	startEdge := CreateStartEdge(firstNode)
+//	startEdge, _ := CreateStartEdge(firstNode)
 func CreateStartEdge[T g.SharedState](to g.Node[T]) g.Edge[T] {
-	return i.EdgeImplFactory(createStartNode[T](), to, g.StartEdge)
+	startNode, _ := createStartNode[T]()
+	return i.EdgeImplFactory(startNode, to, g.StartEdge)
 }
 
 // CreateEndEdge creates a new edge from a specified node to the implicit end node.
@@ -73,7 +74,8 @@ func CreateStartEdge[T g.SharedState](to g.Node[T]) g.Edge[T] {
 // Example:
 //
 //	lastNode, _ := CreateNode[MyState]("last", myFunction)
-//	endEdge := CreateEndEdge(lastNode)
+//	endEdge, _ := CreateEndEdge(lastNode)
 func CreateEndEdge[T g.SharedState](from g.Node[T], labels ...map[string]string) g.Edge[T] {
-	return i.EdgeImplFactory(from, createEndNode[T](), g.EndEdge, labels...)
+	endNode, _ := createEndNode[T]()
+	return i.EdgeImplFactory(from, endNode, g.EndEdge, labels...)
 }

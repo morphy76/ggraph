@@ -14,9 +14,9 @@ import (
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
 
-var _ g.SharedState = (*GameState)(nil)
+var _ g.SharedState = (*gameState)(nil)
 
-type GameState struct {
+type gameState struct {
 	Target  int
 	Guess   int
 	Tries   int
@@ -26,24 +26,24 @@ type GameState struct {
 	High    int
 }
 
-type FilePersistence struct {
+type filePersistence struct {
 	baseDir string
 }
 
-func NewFilePersistence(baseDir string) *FilePersistence {
+func newFilePersistence(baseDir string) *filePersistence {
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		log.Printf("Failed to create base directory: %v", err)
 	}
-	return &FilePersistence{
+	return &filePersistence{
 		baseDir: baseDir,
 	}
 }
 
-func (fp *FilePersistence) getFilePath(runtimeID uuid.UUID) string {
+func (fp *filePersistence) getFilePath(runtimeID uuid.UUID) string {
 	return filepath.Join(fp.baseDir, fmt.Sprintf("game_state_%s.json", runtimeID.String()))
 }
 
-func (fp *FilePersistence) Persist(ctx context.Context, runtimeID uuid.UUID, state GameState) error {
+func (fp *filePersistence) Persist(ctx context.Context, runtimeID uuid.UUID, state gameState) error {
 	filePath := fp.getFilePath(runtimeID)
 
 	data, err := json.MarshalIndent(state, "", "  ")
@@ -60,21 +60,21 @@ func (fp *FilePersistence) Persist(ctx context.Context, runtimeID uuid.UUID, sta
 	return nil
 }
 
-func (fp *FilePersistence) Restore(ctx context.Context, runtimeID uuid.UUID) (GameState, error) {
+func (fp *filePersistence) Restore(ctx context.Context, runtimeID uuid.UUID) (gameState, error) {
 	filePath := fp.getFilePath(runtimeID)
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return GameState{}, fmt.Errorf("no saved state found: %w", err)
+			return gameState{}, fmt.Errorf("no saved state found: %w", err)
 		}
-		return GameState{}, fmt.Errorf("failed to read state file: %w", err)
+		return gameState{}, fmt.Errorf("failed to read state file: %w", err)
 	}
 
-	var state GameState
+	var state gameState
 	err = json.Unmarshal(data, &state)
 	if err != nil {
-		return GameState{}, fmt.Errorf("failed to unmarshal state: %w", err)
+		return gameState{}, fmt.Errorf("failed to unmarshal state: %w", err)
 	}
 
 	fmt.Printf("📂 State restored from %s\n", filePath)
@@ -83,29 +83,29 @@ func (fp *FilePersistence) Restore(ctx context.Context, runtimeID uuid.UUID) (Ga
 
 func main() {
 	stateDir := "game_states"
-	persistence := NewFilePersistence(stateDir)
+	persistence := newFilePersistence(stateDir)
 
 	// Node 1: Determine target number
-	initNode, _ := b.CreateNode("InitNode", func(userInput GameState, currentState GameState, notifyPartial g.NotifyPartialFn[GameState]) (GameState, error) {
+	initNode, _ := b.NewNodeBuilder("InitNode", func(userInput gameState, currentState gameState, notifyPartial g.NotifyPartialFn[gameState]) (gameState, error) {
 		currentState.Target = rand.Intn(100) + 1
 		currentState.Tries = 0
 		currentState.Low = 1
 		currentState.High = 100
 		fmt.Printf("🎯 Target set (hidden)\n")
 		return currentState, nil
-	})
+	}).Build()
 
 	// Node 2: Make a guess using binary search
-	guessNode, _ := b.CreateNode("GuessNode", func(userInput GameState, currentState GameState, notifyPartial g.NotifyPartialFn[GameState]) (GameState, error) {
+	guessNode, _ := b.NewNodeBuilder("GuessNode", func(userInput gameState, currentState gameState, notifyPartial g.NotifyPartialFn[gameState]) (gameState, error) {
 		currentState.Tries++
 		currentState.Guess = (currentState.Low + currentState.High) / 2
 		currentState.Success = (currentState.Guess == currentState.Target)
 		fmt.Printf("🤔 Try #%d: Guessed %d (range: %d-%d)\n", currentState.Tries, currentState.Guess, currentState.Low, currentState.High)
 		return currentState, nil
-	})
+	}).Build()
 
 	// Node 3: Provide hint and adjust range
-	hintNode, _ := b.CreateNode("HintNode", func(userInput GameState, currentState GameState, notifyPartial g.NotifyPartialFn[GameState]) (GameState, error) {
+	hintNode, _ := b.NewNodeBuilder("HintNode", func(userInput gameState, currentState gameState, notifyPartial g.NotifyPartialFn[gameState]) (gameState, error) {
 		if currentState.Guess < currentState.Target {
 			currentState.Low = currentState.Guess + 1
 			currentState.Hint = "higher"
@@ -116,10 +116,10 @@ func main() {
 			fmt.Printf("💡 Hint: Try lower!\n")
 		}
 		return currentState, nil
-	})
+	}).Build()
 
 	// Router: Check success
-	routingPolicy, _ := b.CreateConditionalRoutePolicy(func(userInput, currentState GameState, edges []g.Edge[GameState]) g.Edge[GameState] {
+	routingPolicy, _ := b.CreateConditionalRoutePolicy(func(userInput, currentState gameState, edges []g.Edge[gameState]) g.Edge[gameState] {
 		for _, edge := range edges {
 			if currentState.Success {
 				if label, ok := edge.LabelByKey("path"); ok && label == "success" {
@@ -140,7 +140,7 @@ func main() {
 
 	// Build graph
 	startEdge := b.CreateStartEdge(initNode)
-	stateMonitorCh := make(chan g.StateMonitorEntry[GameState], 10)
+	stateMonitorCh := make(chan g.StateMonitorEntry[gameState], 10)
 	runtime, _ := b.CreateRuntime(startEdge, stateMonitorCh)
 	defer runtime.Shutdown()
 
@@ -173,12 +173,12 @@ func main() {
 		fmt.Println("✅ Previous state restored! Continuing from where we left off...")
 	}
 
-	runtime.Invoke(GameState{})
+	runtime.Invoke(gameState{})
 
 	for entry := range stateMonitorCh {
 		if !entry.Running {
 			if entry.Error == nil {
-				fmt.Printf("✅ Success! Target was %d, found in %d tries\n", entry.CurrentState.Target, entry.CurrentState.Tries)
+				fmt.Printf("✅ Success! Target was %d, found in %d tries\n", entry.StateChange.Target, entry.StateChange.Tries)
 				fmt.Printf("\n💡 Try running this example again to see persistence in action!\n")
 				fmt.Printf("   The state is saved asynchronously in: %s/\n", stateDir)
 			} else {

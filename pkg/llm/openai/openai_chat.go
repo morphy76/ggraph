@@ -45,5 +45,6 @@ func CreateOpenAIChatNodeFromEnvironment(name string, model string) (g.Node[llm.
 		return currentState, nil
 	}
 
-	return b.CreateNode(name, chatFunction)
+	rv, err := b.NewNodeBuilder(name, chatFunction).Build()
+	return rv, err
 }

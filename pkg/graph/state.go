@@ -49,10 +49,17 @@ type SharedState interface {
 //	    }
 //	}
 type StateMonitorEntry[T SharedState] struct {
-	Node          string
-	PreviousState T
-	CurrentState  T
-	Error         error
-	Running       bool
-	Partial       bool
+	// Node is the name of the node that just executed or attempted to execute.
+	Node string
+	// StateChange is the state after the node's execution function completed.
+	StateChange T
+	// Error is any error that occurred during node execution. nil if successful.
+	Error error
+	// Running is true while the graph is still executing, false when execution completes.
+	Running bool
+	// Partial is true if this is a partial state update (from NotifyPartialFn), false
+	// if this is the final state after node completion.
+	Partial bool
+	// ReducerFn is the function used to combine state updates.
+	ReducerFn ReducerFn[T]
 }

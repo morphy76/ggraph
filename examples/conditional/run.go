@@ -8,9 +8,9 @@ import (
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
 
-var _ g.SharedState = (*MyState)(nil)
+var _ g.SharedState = (*myState)(nil)
 
-type MyState struct {
+type myState struct {
 	op     string
 	num2   int
 	Result int
@@ -18,7 +18,7 @@ type MyState struct {
 
 func main() {
 
-	routingPolicy, err := b.CreateConditionalRoutePolicy(func(userInput, currentState MyState, edges []g.Edge[MyState]) g.Edge[MyState] {
+	routingPolicy, err := b.CreateConditionalRoutePolicy(func(userInput, currentState myState, edges []g.Edge[myState]) g.Edge[myState] {
 		op := userInput.op
 		for _, edge := range edges {
 			if label, ok := edge.LabelByKey("operation"); ok && label == op {
@@ -32,25 +32,25 @@ func main() {
 		log.Fatalf("Router creation failed: %v", err)
 	}
 
-	adder, err := b.CreateNode("Adder", func(userInput MyState, currentState MyState, notifyPartial g.NotifyPartialFn[MyState]) (MyState, error) {
+	adder, err := b.NewNodeBuilder("Adder", func(userInput myState, currentState myState, notifyPartial g.NotifyPartialFn[myState]) (myState, error) {
 		currentState.Result = currentState.Result + userInput.num2
 		return currentState, nil
-	})
+	}).Build()
 	if err != nil {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
-	subtractor, err := b.CreateNode("Subtractor", func(userInput MyState, currentState MyState, notifyPartial g.NotifyPartialFn[MyState]) (MyState, error) {
+	subtractor, err := b.NewNodeBuilder("Subtractor", func(userInput myState, currentState myState, notifyPartial g.NotifyPartialFn[myState]) (myState, error) {
 		currentState.Result = currentState.Result - userInput.num2
 		return currentState, nil
-	})
+	}).Build()
 	if err != nil {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
 	startEdge := b.CreateStartEdge(routerNode)
-	stateMonitorCh := make(chan g.StateMonitorEntry[MyState], 10)
-	myGraph, err := b.CreateRuntimeWithInitialState(startEdge, stateMonitorCh, MyState{Result: 10})
+	stateMonitorCh := make(chan g.StateMonitorEntry[myState], 10)
+	myGraph, err := b.CreateRuntimeWithInitialState(startEdge, stateMonitorCh, myState{Result: 10})
 	if err != nil {
 		log.Fatalf("Runtime creation failed: %v", err)
 	}
@@ -67,14 +67,14 @@ func main() {
 		log.Fatalf("Graph validation failed: %v", err)
 	}
 
-	myGraph.Invoke(MyState{op: "+", num2: 5})
-	myGraph.Invoke(MyState{op: "-", num2: 5})
+	myGraph.Invoke(myState{op: "+", num2: 5})
+	myGraph.Invoke(myState{op: "-", num2: 5})
 
 	breakLoop := 2
 	for {
 		entry := <-stateMonitorCh
 		if !entry.Running {
-			fmt.Printf("State Monitor Node: %s Entry: %+v Error: %v\n", entry.Node, entry.CurrentState.Result, entry.Error)
+			fmt.Printf("State Monitor Node: %s Entry: %+v Error: %v\n", entry.Node, entry.StateChange.Result, entry.Error)
 			breakLoop--
 			if breakLoop == 0 {
 				break

@@ -30,8 +30,8 @@ func RuntimeFactory[T g.SharedState](
 		startEdge: startEdge,
 		edges:     []g.Edge[T]{},
 
-		state:          initialState,
-		stateMergeLock: &sync.Mutex{},
+		state:           initialState,
+		stateChangeLock: &sync.Mutex{},
 
 		pendingPersist: make(chan T, 10),
 	}
@@ -49,11 +49,12 @@ var _ g.Runtime[g.SharedState] = (*runtimeImpl[g.SharedState])(nil)
 var _ g.StateObserver[g.SharedState] = (*runtimeImpl[g.SharedState])(nil)
 
 type nodeFnReturnStruct[T g.SharedState] struct {
-	node      g.Node[T]
-	userInput T
-	newState  T
-	err       error
-	partial   bool
+	node        g.Node[T]
+	userInput   T
+	stateChange T
+	err         error
+	partial     bool
+	reducer     g.ReducerFn[T]
 }
 
 type runtimeImpl[T g.SharedState] struct {
@@ -66,8 +67,8 @@ type runtimeImpl[T g.SharedState] struct {
 	startEdge g.Edge[T]
 	edges     []g.Edge[T]
 
-	state          T
-	stateMergeLock *sync.Mutex
+	state           T
+	stateChangeLock *sync.Mutex
 
 	executing atomic.Bool
 
@@ -85,7 +86,7 @@ func (r *runtimeImpl[T]) Invoke(userInput T) {
 	if !r.executing.CompareAndSwap(false, true) {
 		// Already executing, send error to monitor channel
 		if r.stateMonitorCh != nil {
-			r.stateMonitorCh <- GraphError("Runtime", r.CurrentState(), fmt.Errorf("runtime is already executing, concurrent invocations not allowed"))
+			r.stateMonitorCh <- monitorError[T]("Runtime", fmt.Errorf("runtime is already executing, concurrent invocations not allowed"))
 		}
 		return
 	}
@@ -121,11 +122,12 @@ func (r *runtimeImpl[T]) Shutdown() {
 func (r *runtimeImpl[T]) NotifyStateChange(
 	node g.Node[T],
 	userInput T,
-	newState T,
+	stateChange T,
+	reducer g.ReducerFn[T],
 	err error,
 	partial bool,
 ) {
-	r.outcomeCh <- nodeFnReturnStruct[T]{node: node, userInput: userInput, newState: newState, err: err, partial: partial}
+	r.outcomeCh <- nodeFnReturnStruct[T]{node: node, userInput: userInput, stateChange: stateChange, err: err, partial: partial, reducer: reducer}
 }
 
 func (r *runtimeImpl[T]) StartEdge() g.Edge[T] {
@@ -133,8 +135,8 @@ func (r *runtimeImpl[T]) StartEdge() g.Edge[T] {
 }
 
 func (r *runtimeImpl[T]) CurrentState() T {
-	r.stateMergeLock.Lock()
-	defer r.stateMergeLock.Unlock()
+	r.stateChangeLock.Lock()
+	defer r.stateChangeLock.Unlock()
 	return r.state
 }
 
@@ -159,9 +161,9 @@ func (r *runtimeImpl[T]) Restore() error {
 	if err != nil {
 		return fmt.Errorf("state restoration failed: %w", err)
 	}
-	r.stateMergeLock.Lock()
+	r.stateChangeLock.Lock()
 	r.state = restoredState
-	r.stateMergeLock.Unlock()
+	r.stateChangeLock.Unlock()
 	r.persistLock.Lock()
 	r.lastPersisted = restoredState
 	r.persistLock.Unlock()
@@ -175,9 +177,9 @@ func (r *runtimeImpl[T]) persistState() error {
 	if r.identity == uuid.Nil {
 		return fmt.Errorf("runtime identity is not set")
 	}
-	r.stateMergeLock.Lock()
+	r.stateChangeLock.Lock()
 	currentState := r.state
-	r.stateMergeLock.Unlock()
+	r.stateChangeLock.Unlock()
 
 	r.persistLock.RLock()
 	lastPersisted := r.lastPersisted
@@ -196,10 +198,10 @@ func (r *runtimeImpl[T]) persistState() error {
 }
 
 func (r *runtimeImpl[T]) start() {
-	go r.onStateChange()
+	go r.onNodeOutcome()
 }
 
-func (r *runtimeImpl[T]) onStateChange() {
+func (r *runtimeImpl[T]) onNodeOutcome() {
 	for {
 		select {
 		case <-r.ctx.Done():
@@ -208,7 +210,7 @@ func (r *runtimeImpl[T]) onStateChange() {
 		case result := <-r.outcomeCh:
 			if result.err != nil {
 				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- GraphError(result.node.Name(), r.state, result.err)
+					r.stateMonitorCh <- monitorError[T](result.node.Name(), result.err)
 					r.executing.Store(false)
 				}
 				continue
@@ -216,55 +218,55 @@ func (r *runtimeImpl[T]) onStateChange() {
 
 			if result.partial {
 				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- GraphPartial(result.node.Name(), result.newState)
+					r.stateMonitorCh <- monitorPartial(result.node.Name(), result.stateChange)
 				}
 				continue
 			}
 
-			previous := r.replace(result.newState)
+			previous := r.replace(result.stateChange, result.reducer)
 			err := r.persistState()
 			if err != nil {
 				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- GraphNonFatalError[T](result.node.Name(), fmt.Errorf("state persistence error: %w", err))
+					r.stateMonitorCh <- monitorNonFatalError[T](result.node.Name(), fmt.Errorf("state persistence error: %w", err))
 				}
 			}
 
 			if result.node.Role() == g.EndNode {
 				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- GraphCompleted(result.node.Name(), r.state)
+					r.stateMonitorCh <- monitorCompleted[T](result.node.Name())
 					r.executing.Store(false)
 				}
 				continue
 			} else {
 				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- GraphRunning(result.node.Name(), previous, r.state)
+					r.stateMonitorCh <- monitorRunning(result.node.Name(), previous)
 				}
 			}
 
 			outboundEdges := r.edgesFrom(result.node)
 			if len(outboundEdges) == 0 {
-				r.stateMonitorCh <- GraphError(result.node.Name(), r.state, fmt.Errorf("no outbound edges from node %s", result.node.Name()))
+				r.stateMonitorCh <- monitorError[T](result.node.Name(), fmt.Errorf("no outbound edges from node %s", result.node.Name()))
 				r.executing.Store(false)
 				continue
 			}
 
 			policy := result.node.RoutePolicy()
 			if policy == nil {
-				r.stateMonitorCh <- GraphError(result.node.Name(), r.state, fmt.Errorf("node %s has no routing policy", result.node.Name()))
+				r.stateMonitorCh <- monitorError[T](result.node.Name(), fmt.Errorf("node %s has no routing policy", result.node.Name()))
 				r.executing.Store(false)
 				continue
 			}
 
 			nextEdge := policy.SelectEdge(result.userInput, r.state, outboundEdges)
 			if nextEdge == nil {
-				r.stateMonitorCh <- GraphError(result.node.Name(), r.state, fmt.Errorf("routing policy for node %s returned nil edge", result.node.Name()))
+				r.stateMonitorCh <- monitorError[T](result.node.Name(), fmt.Errorf("routing policy for node %s returned nil edge", result.node.Name()))
 				r.executing.Store(false)
 				continue
 			}
 
 			nextNode := nextEdge.To()
 			if nextNode == nil {
-				r.stateMonitorCh <- GraphError(result.node.Name(), r.state, fmt.Errorf("next edge from node %s has nil target node", result.node.Name()))
+				r.stateMonitorCh <- monitorError[T](result.node.Name(), fmt.Errorf("next edge from node %s has nil target node", result.node.Name()))
 				r.executing.Store(false)
 				continue
 			}
@@ -274,12 +276,12 @@ func (r *runtimeImpl[T]) onStateChange() {
 	}
 }
 
-func (r *runtimeImpl[T]) replace(newState T) T {
-	r.stateMergeLock.Lock()
-	defer r.stateMergeLock.Unlock()
+func (r *runtimeImpl[T]) replace(stateChange T, reducer g.ReducerFn[T]) T {
+	r.stateChangeLock.Lock()
+	defer r.stateChangeLock.Unlock()
 
 	previous := r.state
-	r.state = newState
+	r.state = reducer(r.state, stateChange)
 	return previous
 }
 
@@ -346,7 +348,7 @@ func (r *runtimeImpl[T]) persistenceWorker() {
 		case state := <-r.pendingPersist:
 			if err := r.persistFn(r.ctx, r.identity, state); err != nil {
 				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- GraphNonFatalError[T]("Persistence", fmt.Errorf("state persistence error: %w", err))
+					r.stateMonitorCh <- monitorNonFatalError[T]("Persistence", fmt.Errorf("state persistence error: %w", err))
 				}
 			} else {
 				r.persistLock.Lock()
@@ -363,7 +365,7 @@ func (r *runtimeImpl[T]) flushPendingStates() {
 		case state := <-r.pendingPersist:
 			if err := r.persistFn(r.ctx, r.identity, state); err != nil {
 				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- GraphNonFatalError[T]("Persistence", fmt.Errorf("state persistence error during flush: %w", err))
+					r.stateMonitorCh <- monitorNonFatalError[T]("Persistence", fmt.Errorf("state persistence error during flush: %w", err))
 				}
 			}
 		default:

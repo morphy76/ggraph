@@ -160,4 +160,14 @@ type Runtime[T SharedState] interface {
 	// Returns:
 	//   - The StartEdge of this runtime.
 	StartEdge() Edge[T]
+
+	// CurrentState returns the current state of the graph execution.
+	//
+	// This method provides access to the latest state after the most recent
+	// node execution. It is safe for concurrent use and reflects the state
+	// as it evolves through the graph.
+	//
+	// Returns:
+	//   - The current state of type T.
+	CurrentState() T
 }

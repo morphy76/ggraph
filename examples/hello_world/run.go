@@ -8,26 +8,26 @@ import (
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
 
-var _ g.SharedState = (*MyState)(nil)
+var _ g.SharedState = (*myState)(nil)
 
-type MyState struct {
+type myState struct {
 	Message string
 }
 
 func main() {
 
-	helloNode, err := b.CreateNode("HelloNode", func(userInput MyState, currentState MyState, notifyPartial g.NotifyPartialFn[MyState]) (MyState, error) {
+	helloNode, err := b.NewNodeBuilder("HelloNode", func(userInput myState, currentState myState, notifyPartial g.NotifyPartialFn[myState]) (myState, error) {
 		currentState.Message = fmt.Sprintf("Hello %s!!!", userInput.Message)
 		return currentState, nil
-	})
+	}).Build()
 	if err != nil {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
-	goodbyeNode, err := b.CreateNode("GoodbyeNode", func(userInput MyState, currentState MyState, notifyPartial g.NotifyPartialFn[MyState]) (MyState, error) {
+	goodbyeNode, err := b.NewNodeBuilder("GoodbyeNode", func(userInput myState, currentState myState, notifyPartial g.NotifyPartialFn[myState]) (myState, error) {
 		currentState.Message = fmt.Sprintf("Goodbye %s!!!", userInput.Message)
 		return currentState, nil
-	})
+	}).Build()
 	if err != nil {
 		log.Fatalf("Node creation failed: %v", err)
 	}
@@ -36,8 +36,8 @@ func main() {
 	midEdge := b.CreateEdge(helloNode, goodbyeNode)
 	endEdge := b.CreateEndEdge(goodbyeNode)
 
-	initialState := MyState{Message: ""}
-	stateMonitorCh := make(chan g.StateMonitorEntry[MyState], 10)
+	initialState := myState{Message: ""}
+	stateMonitorCh := make(chan g.StateMonitorEntry[myState], 10)
 	graph, err := b.CreateRuntimeWithInitialState(startEdge, stateMonitorCh, initialState)
 	if err != nil {
 		log.Fatalf("Runtime creation failed: %v", err)
@@ -50,7 +50,7 @@ func main() {
 		log.Fatalf("Graph validation failed: %v", err)
 	}
 
-	userInput := MyState{Message: "Bob"}
+	userInput := myState{Message: "Bob"}
 	graph.Invoke(userInput)
 
 	for {

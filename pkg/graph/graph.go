@@ -52,7 +52,7 @@ type NotifyPartialFn[T SharedState] func(newState T)
 //	    currentState.Message = fmt.Sprintf("Processed: %s", userInput.Request)
 //	    return currentState, nil
 //	}
-type NodeFn[T SharedState] func(userInput T, currentState T, notify NotifyPartialFn[T]) (T, error)
+type NodeFn[T SharedState] func(userInput, currentState T, notify NotifyPartialFn[T]) (T, error)
 
 // EdgeSelectionFn is a function that determines which edge to follow during graph execution.
 //
@@ -76,30 +76,7 @@ type NodeFn[T SharedState] func(userInput T, currentState T, notify NotifyPartia
 //	    }
 //	    return edges[1] // Loop back edge
 //	}
-type EdgeSelectionFn[T SharedState] func(userInput T, currentState T, edges []Edge[T]) Edge[T]
-
-// StateObserver is an internal interface for tracking state changes during graph execution.
-//
-// This interface is primarily used by the runtime to monitor and record state transitions
-// as nodes execute. It provides the mechanism for the state monitoring channel to receive
-// updates about graph execution progress.
-//
-// Most users will not need to implement this interface directly; it is used internally
-// by the runtime implementation.
-type StateObserver[T SharedState] interface {
-	// NotifyStateChange is called whenever a node modifies the state.
-	//
-	// Parameters:
-	//   - node: The node that produced the state change.
-	//   - userInput: The original user input to the graph.
-	//   - newState: The new state after the node's execution.
-	//   - err: Any error that occurred during node execution.
-	//   - partial: true if this is a partial update, false if final.
-	NotifyStateChange(node Node[T], userInput T, newState T, err error, partial bool)
-
-	// CurrentState returns the current state of the graph execution.
-	CurrentState() T
-}
+type EdgeSelectionFn[T SharedState] func(userInput, currentState T, edges []Edge[T]) Edge[T]
 
 // PersistFn is a function that saves the current state to persistent storage.
 //
@@ -152,6 +129,54 @@ type PersistFn[T SharedState] func(ctx context.Context, runtimeID uuid.UUID, sta
 //	    return state, err
 //	}
 type RestoreFn[T SharedState] func(ctx context.Context, runtimeID uuid.UUID) (T, error)
+
+// ReducerFn is a function that combines multiple states into a single state.
+//
+// This function is used to merge state changes from different nodes or execution
+// paths. It takes the current state and a new state change, and produces a combined
+// state that reflects both.
+//
+// Parameters:
+//   - currentState: The existing state before applying the change.
+//   - change: The new state change to incorporate.
+//
+// Returns:
+//   - The combined state after applying the change.
+//
+// Example:
+//
+//	func mergeStates(currentState MyState, change MyState) MyState {
+//	    currentState.Counter += change.Counter
+//	    if change.Message != "" {
+//	        currentState.Message = change.Message
+//	    }
+//	    return currentState
+//	}
+type ReducerFn[T SharedState] func(currentState, change T) T
+
+// StateObserver is an internal interface for tracking state changes during graph execution.
+//
+// This interface is primarily used by the runtime to monitor and record state transitions
+// as nodes execute. It provides the mechanism for the state monitoring channel to receive
+// updates about graph execution progress.
+//
+// Most users will not need to implement this interface directly; it is used internally
+// by the runtime implementation.
+type StateObserver[T SharedState] interface {
+	// NotifyStateChange is called whenever a node modifies the state.
+	//
+	// Parameters:
+	//   - node: The node that produced the state change.
+	//   - userInput: The original user input to the graph.
+	//   - stateChange: The new state after the node's execution.
+	//   - reducer: The reducer function used to combine states.
+	//   - err: Any error that occurred during node execution.
+	//   - partial: true if this is a partial update, false if final.
+	NotifyStateChange(node Node[T], userInput, stateChange T, reducer ReducerFn[T], err error, partial bool)
+
+	// CurrentState returns the current state of the graph execution.
+	CurrentState() T
+}
 
 // Persistent is an interface for managing state persistence in graph workflows.
 //
