@@ -97,7 +97,7 @@ func main() {
 
 	for entry := range stateMonitorCh {
 		if !entry.Running {
-			fmt.Printf("✅ Success! Target was %d, found in %d tries\n", entry.StateChange.Target, entry.StateChange.Tries)
+			fmt.Printf("✅ Success! Target was %d, found in %d tries\n", entry.NewState.Target, entry.NewState.Tries)
 			break
 		}
 	}

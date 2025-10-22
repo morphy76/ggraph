@@ -178,7 +178,7 @@ func main() {
 	for entry := range stateMonitorCh {
 		if !entry.Running {
 			if entry.Error == nil {
-				fmt.Printf("✅ Success! Target was %d, found in %d tries\n", entry.StateChange.Target, entry.StateChange.Tries)
+				fmt.Printf("✅ Success! Target was %d, found in %d tries\n", entry.NewState.Target, entry.NewState.Tries)
 				fmt.Printf("\n💡 Try running this example again to see persistence in action!\n")
 				fmt.Printf("   The state is saved asynchronously in: %s/\n", stateDir)
 			} else {

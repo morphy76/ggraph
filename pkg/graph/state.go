@@ -51,8 +51,8 @@ type SharedState interface {
 type StateMonitorEntry[T SharedState] struct {
 	// Node is the name of the node that just executed or attempted to execute.
 	Node string
-	// StateChange is the state after the node's execution function completed.
-	StateChange T
+	// NewState is the state after the node's execution function completed.
+	NewState T
 	// Error is any error that occurred during node execution. nil if successful.
 	Error error
 	// Running is true while the graph is still executing, false when execution completes.

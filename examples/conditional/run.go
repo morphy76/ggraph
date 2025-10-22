@@ -74,7 +74,7 @@ func main() {
 	for {
 		entry := <-stateMonitorCh
 		if !entry.Running {
-			fmt.Printf("State Monitor Node: %s Entry: %+v Error: %v\n", entry.Node, entry.StateChange.Result, entry.Error)
+			fmt.Printf("State Monitor Node: %s Entry: %+v Error: %v\n", entry.Node, entry.NewState.Result, entry.Error)
 			breakLoop--
 			if breakLoop == 0 {
 				break

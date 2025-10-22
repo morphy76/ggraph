@@ -4,12 +4,12 @@ import (
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
 
-func monitorRunning[T g.SharedState](node string, stateChange T) g.StateMonitorEntry[T] {
+func monitorRunning[T g.SharedState](node string, newState T) g.StateMonitorEntry[T] {
 	return g.StateMonitorEntry[T]{
-		Node:        node,
-		StateChange: stateChange,
-		Running:     true,
-		Partial:     false,
+		Node:     node,
+		Running:  true,
+		Partial:  false,
+		NewState: newState,
 	}
 }
 
@@ -33,17 +33,18 @@ func monitorError[T g.SharedState](node string, err error) g.StateMonitorEntry[T
 
 func monitorPartial[T g.SharedState](node string, stateChange T) g.StateMonitorEntry[T] {
 	return g.StateMonitorEntry[T]{
-		Node:        node,
-		StateChange: stateChange,
-		Running:     true,
-		Partial:     true,
+		Node:     node,
+		NewState: stateChange,
+		Running:  true,
+		Partial:  true,
 	}
 }
 
-func monitorCompleted[T g.SharedState](node string) g.StateMonitorEntry[T] {
+func monitorCompleted[T g.SharedState](node string, newState T) g.StateMonitorEntry[T] {
 	return g.StateMonitorEntry[T]{
-		Node:    node,
-		Running: false,
-		Partial: false,
+		Node:     node,
+		Running:  false,
+		Partial:  false,
+		NewState: newState,
 	}
 }

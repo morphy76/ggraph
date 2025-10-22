@@ -55,7 +55,7 @@ func main() {
 
 	for {
 		entry := <-stateMonitorCh
-		fmt.Printf("State Monitor Entry: %+v\n", entry)
+		fmt.Printf("[%s - Running: %t], Graph state message: %s, Error: %v\n", entry.Node, entry.Running, entry.NewState, entry.Error)
 		if !entry.Running {
 			break
 		}

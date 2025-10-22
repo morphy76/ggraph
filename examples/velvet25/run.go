@@ -78,11 +78,11 @@ func main() {
 		}
 
 		if !entry.Running {
-			fmt.Printf("%+v\n\n", entry.StateChange)
+			fmt.Printf("%+v\n\n", entry.NewState)
 			break
 		} else {
 			fmt.Printf("Working node: %s\n", entry.Node)
-			for _, message := range entry.StateChange.Messages {
+			for _, message := range entry.NewState.Messages {
 				fmt.Printf("[%d]: %s\n", message.Role, message.Content)
 			}
 			fmt.Println("---")

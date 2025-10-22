@@ -223,7 +223,7 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 				continue
 			}
 
-			previous := r.replace(result.stateChange, result.reducer)
+			newState := r.replace(result.stateChange, result.reducer)
 			err := r.persistState()
 			if err != nil {
 				if r.stateMonitorCh != nil {
@@ -233,13 +233,13 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 
 			if result.node.Role() == g.EndNode {
 				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- monitorCompleted[T](result.node.Name())
+					r.stateMonitorCh <- monitorCompleted(result.node.Name(), newState)
 					r.executing.Store(false)
 				}
 				continue
 			} else {
 				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- monitorRunning(result.node.Name(), previous)
+					r.stateMonitorCh <- monitorRunning(result.node.Name(), newState)
 				}
 			}
 
@@ -280,9 +280,8 @@ func (r *runtimeImpl[T]) replace(stateChange T, reducer g.ReducerFn[T]) T {
 	r.stateChangeLock.Lock()
 	defer r.stateChangeLock.Unlock()
 
-	previous := r.state
 	r.state = reducer(r.state, stateChange)
-	return previous
+	return r.state
 }
 
 func (r *runtimeImpl[T]) edgesFrom(node g.Node[T]) []g.Edge[T] {
