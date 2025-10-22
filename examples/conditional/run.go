@@ -68,17 +68,29 @@ func main() {
 	}
 
 	myGraph.Invoke(myState{op: "+", num2: 5})
-	myGraph.Invoke(myState{op: "-", num2: 5})
-
-	breakLoop := 2
 	for {
 		entry := <-stateMonitorCh
 		if !entry.Running {
 			fmt.Printf("State Monitor Node: %s Entry: %+v Error: %v\n", entry.Node, entry.NewState.Result, entry.Error)
-			breakLoop--
-			if breakLoop == 0 {
-				break
-			}
+			break
+		}
+	}
+
+	myGraph.Invoke(myState{op: "-", num2: 5})
+	for {
+		entry := <-stateMonitorCh
+		if !entry.Running {
+			fmt.Printf("State Monitor Node: %s Entry: %+v Error: %v\n", entry.Node, entry.NewState.Result, entry.Error)
+			break
+		}
+	}
+
+	myGraph.Invoke(myState{op: "-", num2: 5})
+	for {
+		entry := <-stateMonitorCh
+		if !entry.Running {
+			fmt.Printf("State Monitor Node: %s Entry: %+v Error: %v\n", entry.Node, entry.NewState.Result, entry.Error)
+			break
 		}
 	}
 }
