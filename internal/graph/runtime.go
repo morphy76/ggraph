@@ -128,13 +128,6 @@ func (r *runtimeImpl[T]) Shutdown() {
 	case <-done:
 	case <-ctx.Done():
 	}
-
-	close(r.pendingPersist)
-	close(r.outcomeCh)
-
-	if r.stateMonitorCh != nil {
-		close(r.stateMonitorCh)
-	}
 }
 
 func (r *runtimeImpl[T]) NotifyStateChange(

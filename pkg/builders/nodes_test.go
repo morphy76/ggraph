@@ -176,7 +176,7 @@ func TestNodeBuilder_ReservedNameStart(t *testing.T) {
 		t.Error("Expected nil node when using reserved name, got non-nil node")
 	}
 
-	expectedErrMsg := "node name StartNode is reserved and cannot be used"
+	expectedErrMsg := "node creation error for name StartNode: node name is reserved and cannot be used"
 	if err.Error() != expectedErrMsg {
 		t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
 	}
@@ -195,7 +195,7 @@ func TestNodeBuilder_ReservedNameEnd(t *testing.T) {
 		t.Error("Expected nil node when using reserved name, got non-nil node")
 	}
 
-	expectedErrMsg := "node name EndNode is reserved and cannot be used"
+	expectedErrMsg := "node creation error for name EndNode: node name is reserved and cannot be used"
 	if err.Error() != expectedErrMsg {
 		t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
 	}

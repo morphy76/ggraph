@@ -181,7 +181,7 @@ func TestRouterPolicyImplFactory_WithNilSelectionFn(t *testing.T) {
 	}
 
 	// Check error message
-	expectedMsg := "conditional route policy creation failed: selection function cannot be nil"
+	expectedMsg := "conditional route policy creation failed: edge selection function cannot be nil"
 	if err.Error() != expectedMsg {
 		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
 	}

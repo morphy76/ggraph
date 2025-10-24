@@ -470,7 +470,7 @@ func TestRuntime_Restore_WithoutPersistentState(t *testing.T) {
 		t.Fatal("Expected error when restoring without persistence setup, got nil")
 	}
 
-	expectedMsg := "restore function is not set"
+	expectedMsg := "cannot restore the graph: restore function is not set"
 	if err.Error() != expectedMsg {
 		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
 	}
@@ -503,7 +503,7 @@ func TestRuntime_Restore_WithoutRuntimeID(t *testing.T) {
 		t.Fatal("Expected error when restoring without runtime ID, got nil")
 	}
 
-	expectedMsg := "runtime identity is not set"
+	expectedMsg := "cannot restore the graph: runtime identity is not set"
 	if err.Error() != expectedMsg {
 		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
 	}
@@ -784,7 +784,7 @@ func TestRuntime_NoOutboundEdges(t *testing.T) {
 		case entry := <-stateMonitorCh:
 			if entry.Error != nil {
 				foundError = true
-				expectedMsg := fmt.Sprintf("no outbound edges from node %s", node1.Name())
+				expectedMsg := fmt.Sprintf("routing error for node %s: no outbound edges from node", node1.Name())
 				if entry.Error.Error() != expectedMsg {
 					t.Errorf("Expected error '%s', got '%s'", expectedMsg, entry.Error.Error())
 				}
@@ -830,7 +830,7 @@ func TestRuntime_NilRoutingPolicy(t *testing.T) {
 		case entry := <-stateMonitorCh:
 			if entry.Error != nil {
 				foundError = true
-				expectedMsg := fmt.Sprintf("node %s has no routing policy", node1.Name())
+				expectedMsg := fmt.Sprintf("routing error for node %s: no routing policy defined for node", node1.Name())
 				if entry.Error.Error() != expectedMsg {
 					t.Errorf("Expected error '%s', got '%s'", expectedMsg, entry.Error.Error())
 				}
