@@ -1,5 +1,12 @@
 package graph
 
+import "errors"
+
+var (
+	// ErrReservedNodeName indicates that the node name is reserved and cannot be used.
+	ErrReservedNodeName = errors.New("node name is reserved and cannot be used")
+)
+
 // NodeRole represents the structural role of a node within the graph topology.
 //
 // The role determines how the node participates in the graph workflow and affects

@@ -92,7 +92,7 @@ func (b NodeBuilder[T]) WithReducer(reducer g.ReducerFn[T]) NodeBuilder[T] {
 //	            Build()
 func (b NodeBuilder[T]) Build() (g.Node[T], error) {
 	if b.name == ReservedNodeNameStart || b.name == ReservedNodeNameEnd {
-		return nil, fmt.Errorf("node name %s is reserved and cannot be used", b.name)
+		return nil, fmt.Errorf("node creation error for name %s: %w", b.name, g.ErrReservedNodeName)
 	}
 	policy := b.routingPolicy
 	if policy == nil {

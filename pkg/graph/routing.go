@@ -1,5 +1,20 @@
 package graph
 
+import "errors"
+
+var (
+	// ErrEdgeSelectionFnNil indicates that the edge selection function is nil.
+	ErrEdgeSelectionFnNil = errors.New("edge selection function cannot be nil")
+	// ErrNoOutboundEdges indicates that there are no outbound edges from a node.
+	ErrNoOutboundEdges = errors.New("no outbound edges from node")
+	// ErrNoRoutingPolicy indicates that a node has no routing policy defined.
+	ErrNoRoutingPolicy = errors.New("no routing policy defined for node")
+	// ErrNilEdge indicates that a routing policy returned a nil edge.
+	ErrNilEdge = errors.New("routing policy returned nil edge")
+	// ErrNextEdgeNil indicates that the next edge from a node has a nil target node.
+	ErrNextEdgeNil = errors.New("next edge from node has nil target node")
+)
+
 // RoutePolicy defines the strategy for selecting which edge to follow after node execution.
 //
 // Routing policies are the mechanism that enables dynamic workflow behavior in graphs.

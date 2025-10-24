@@ -3,8 +3,10 @@ package graph
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/google/uuid"
 	g "github.com/morphy76/ggraph/pkg/graph"
@@ -17,7 +19,7 @@ func RuntimeFactory[T g.SharedState](
 	initialState T,
 ) (g.Runtime[T], error) {
 	if startEdge == nil {
-		return nil, fmt.Errorf("runtime creation failed: start edge cannot be nil")
+		return nil, fmt.Errorf("runtime creation failed: %w", g.ErrStartEdgeNil)
 	}
 	ctx, cancelFn := context.WithCancel(context.Background())
 	rv := &runtimeImpl[T]{
@@ -82,12 +84,8 @@ type runtimeImpl[T g.SharedState] struct {
 }
 
 func (r *runtimeImpl[T]) Invoke(userInput T) {
-	// Use atomic compare-and-swap to prevent concurrent invocations
 	if !r.executing.CompareAndSwap(false, true) {
-		// Already executing, send error to monitor channel
-		if r.stateMonitorCh != nil {
-			r.stateMonitorCh <- monitorError[T]("Runtime", fmt.Errorf("runtime is already executing, concurrent invocations not allowed"))
-		}
+		r.sendMonitorEntry(monitorError[T]("Runtime", fmt.Errorf("cannot invoke graph: %w", g.ErrRuntimeExecuting)))
 		return
 	}
 
@@ -100,7 +98,7 @@ func (r *runtimeImpl[T]) AddEdge(edge ...g.Edge[T]) {
 
 func (r *runtimeImpl[T]) Validate() error {
 	if r.startEdge.From() == nil {
-		return fmt.Errorf("graph validation failed: start edge 'from' node is nil")
+		return fmt.Errorf("graph validation failed: %w", g.ErrStartNodeNil)
 	}
 
 	// Check if there's at least one path from start to an end edge
@@ -108,7 +106,7 @@ func (r *runtimeImpl[T]) Validate() error {
 	// Include the start edge in the traversal by starting from its target node
 	hasPathToEnd := r.hasPathToEndEdge(r.startEdge.To(), visited)
 	if !hasPathToEnd {
-		return fmt.Errorf("graph validation failed: no path from start edge to any end edge")
+		return fmt.Errorf("graph validation failed: %w", g.ErrNoPathToEnd)
 	}
 
 	return nil
@@ -116,7 +114,27 @@ func (r *runtimeImpl[T]) Validate() error {
 
 func (r *runtimeImpl[T]) Shutdown() {
 	r.cancel()
-	r.persistWg.Wait()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		r.persistWg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
+
+	close(r.pendingPersist)
+	close(r.outcomeCh)
+
+	if r.stateMonitorCh != nil {
+		close(r.stateMonitorCh)
+	}
 }
 
 func (r *runtimeImpl[T]) NotifyStateChange(
@@ -152,10 +170,10 @@ func (r *runtimeImpl[T]) SetPersistentState(
 
 func (r *runtimeImpl[T]) Restore() error {
 	if r.restoreFn == nil {
-		return fmt.Errorf("restore function is not set")
+		return fmt.Errorf("cannot restore the graph: %w", g.ErrRestoreNotSet)
 	}
 	if r.identity == uuid.Nil {
-		return fmt.Errorf("runtime identity is not set")
+		return fmt.Errorf("cannot restore the graph: %w", g.ErrRuntimeIDNotSet)
 	}
 	restoredState, err := r.restoreFn(r.ctx, r.identity)
 	if err != nil {
@@ -175,7 +193,7 @@ func (r *runtimeImpl[T]) persistState() error {
 		return nil
 	}
 	if r.identity == uuid.Nil {
-		return fmt.Errorf("runtime identity is not set")
+		return fmt.Errorf("cannot persist state: %w", g.ErrRuntimeIDNotSet)
 	}
 	r.stateChangeLock.Lock()
 	currentState := r.state
@@ -189,9 +207,15 @@ func (r *runtimeImpl[T]) persistState() error {
 		return nil
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	select {
 	case r.pendingPersist <- currentState:
+	case <-ctx.Done():
+		r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", fmt.Errorf("persistence timed out: %w", ctx.Err())))
 	default:
+		r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", fmt.Errorf("cannot persist state: %w", g.ErrPersistenceQueueFull)))
 	}
 
 	return nil
@@ -209,70 +233,76 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 			return
 		case result := <-r.outcomeCh:
 			if result.err != nil {
-				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- monitorError[T](result.node.Name(), result.err)
-					r.executing.Store(false)
-				}
+				r.sendMonitorEntry(monitorError[T](result.node.Name(), result.err))
+				r.executing.Store(false)
 				continue
 			}
 
 			if result.partial {
-				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- monitorPartial(result.node.Name(), result.stateChange)
-				}
+				r.sendMonitorEntry(monitorPartial(result.node.Name(), result.stateChange))
 				continue
 			}
 
 			newState := r.replace(result.stateChange, result.reducer)
 			err := r.persistState()
 			if err != nil {
-				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- monitorNonFatalError[T](result.node.Name(), fmt.Errorf("state persistence error: %w", err))
-				}
+				r.sendMonitorEntry(monitorNonFatalError[T](result.node.Name(), fmt.Errorf("state persistence error: %w", err)))
 			}
 
 			if result.node.Role() == g.EndNode {
 				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- monitorCompleted(result.node.Name(), newState)
+					r.sendMonitorEntry(monitorCompleted(result.node.Name(), newState))
 					r.executing.Store(false)
 				}
 				continue
 			} else {
 				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- monitorRunning(result.node.Name(), newState)
+					r.sendMonitorEntry(monitorRunning(result.node.Name(), newState))
 				}
 			}
 
 			outboundEdges := r.edgesFrom(result.node)
 			if len(outboundEdges) == 0 {
-				r.stateMonitorCh <- monitorError[T](result.node.Name(), fmt.Errorf("no outbound edges from node %s", result.node.Name()))
+				r.sendMonitorEntry(monitorError[T](result.node.Name(), fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNoOutboundEdges)))
 				r.executing.Store(false)
 				continue
 			}
 
 			policy := result.node.RoutePolicy()
 			if policy == nil {
-				r.stateMonitorCh <- monitorError[T](result.node.Name(), fmt.Errorf("node %s has no routing policy", result.node.Name()))
+				r.sendMonitorEntry(monitorError[T](result.node.Name(), fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNoRoutingPolicy)))
 				r.executing.Store(false)
 				continue
 			}
 
 			nextEdge := policy.SelectEdge(result.userInput, r.state, outboundEdges)
 			if nextEdge == nil {
-				r.stateMonitorCh <- monitorError[T](result.node.Name(), fmt.Errorf("routing policy for node %s returned nil edge", result.node.Name()))
+				r.sendMonitorEntry(monitorError[T](result.node.Name(), fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNilEdge)))
 				r.executing.Store(false)
 				continue
 			}
 
 			nextNode := nextEdge.To()
 			if nextNode == nil {
-				r.stateMonitorCh <- monitorError[T](result.node.Name(), fmt.Errorf("next edge from node %s has nil target node", result.node.Name()))
+				r.sendMonitorEntry(monitorError[T](result.node.Name(), fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNextEdgeNil)))
 				r.executing.Store(false)
 				continue
 			}
 
 			nextNode.Accept(result.userInput, r)
 		}
+	}
+}
+
+func (r *runtimeImpl[T]) sendMonitorEntry(entry g.StateMonitorEntry[T]) {
+	if r.stateMonitorCh == nil {
+		return
+	}
+
+	select {
+	case r.stateMonitorCh <- entry:
+	case <-time.After(100 * time.Millisecond):
+	case <-r.ctx.Done():
 	}
 }
 
@@ -346,9 +376,7 @@ func (r *runtimeImpl[T]) persistenceWorker() {
 			return
 		case state := <-r.pendingPersist:
 			if err := r.persistFn(r.ctx, r.identity, state); err != nil {
-				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- monitorNonFatalError[T]("Persistence", fmt.Errorf("state persistence error: %w", err))
-				}
+				r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", fmt.Errorf("state persistence error: %w", err)))
 			} else {
 				r.persistLock.Lock()
 				r.lastPersisted = state
@@ -363,9 +391,7 @@ func (r *runtimeImpl[T]) flushPendingStates() {
 		select {
 		case state := <-r.pendingPersist:
 			if err := r.persistFn(r.ctx, r.identity, state); err != nil {
-				if r.stateMonitorCh != nil {
-					r.stateMonitorCh <- monitorNonFatalError[T]("Persistence", fmt.Errorf("state persistence error during flush: %w", err))
-				}
+				r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", fmt.Errorf("state persistence error during flush: %w", err)))
 			}
 		default:
 			return
@@ -374,5 +400,5 @@ func (r *runtimeImpl[T]) flushPendingStates() {
 }
 
 func (r *runtimeImpl[T]) statesEqual(a, b T) bool {
-	return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
+	return reflect.DeepEqual(a, b)
 }

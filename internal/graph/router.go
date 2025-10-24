@@ -17,7 +17,7 @@ func AnyRoute[T g.SharedState](userInput T, currentState T, edges []g.Edge[T]) g
 // RouterPolicyImplFactory creates a new instance of RoutePolicy with the specified SharedState type and selection function.
 func RouterPolicyImplFactory[T g.SharedState](selectionFn g.EdgeSelectionFn[T]) (g.RoutePolicy[T], error) {
 	if selectionFn == nil {
-		return nil, fmt.Errorf("conditional route policy creation failed: selection function cannot be nil")
+		return nil, fmt.Errorf("conditional route policy creation failed: %w", g.ErrEdgeSelectionFnNil)
 	}
 	return &routePolicyImpl[T]{
 		selectionFunc: selectionFn,

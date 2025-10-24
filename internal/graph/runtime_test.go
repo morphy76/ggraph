@@ -49,14 +49,7 @@ func (n *mockRuntimeNode) Accept(userInput RuntimeTestState, runtime g.StateObse
 		// Wait for message in mailbox
 		asyncInput := <-n.mailbox
 
-		// Get current state from runtime (need to cast to access internal method)
-		runtimeImpl, ok := runtime.(*runtimeImpl[RuntimeTestState])
-		if !ok {
-			runtime.NotifyStateChange(n, userInput, RuntimeTestState{}, Replacer[RuntimeTestState], fmt.Errorf("could not cast runtime"), false)
-			return
-		}
-
-		currentState := runtimeImpl.CurrentState()
+		currentState := runtime.CurrentState()
 
 		if n.fn != nil {
 			newState, err := n.fn(asyncInput, currentState, func(partial RuntimeTestState) {
@@ -418,8 +411,7 @@ func TestRuntime_CurrentState(t *testing.T) {
 	defer runtime.Shutdown()
 
 	// Cast to internal implementation to access CurrentState
-	runtimeImpl := runtime.(*runtimeImpl[RuntimeTestState])
-	currentState := runtimeImpl.CurrentState()
+	currentState := runtime.CurrentState()
 	if currentState.Value != "initial" {
 		t.Errorf("Expected Value='initial', got '%s'", currentState.Value)
 	}
@@ -456,8 +448,7 @@ func TestRuntime_SetPersistentState(t *testing.T) {
 		t.Errorf("Restore() failed: %v", err)
 	}
 
-	runtimeImpl := runtime.(*runtimeImpl[RuntimeTestState])
-	restoredState := runtimeImpl.CurrentState()
+	restoredState := runtime.CurrentState()
 	if restoredState.Value != "restored" {
 		t.Errorf("Expected restored Value='restored', got '%s'", restoredState.Value)
 	}
@@ -875,8 +866,7 @@ func TestRuntime_EmptyStateMonitorChannel(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Check final state was updated
-	runtimeImpl := runtime.(*runtimeImpl[RuntimeTestState])
-	finalState := runtimeImpl.CurrentState()
+	finalState := runtime.CurrentState()
 	if finalState.Counter != 42 {
 		t.Errorf("Expected Counter=42, got %d", finalState.Counter)
 	}

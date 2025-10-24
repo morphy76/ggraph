@@ -1,5 +1,24 @@
 package graph
 
+import "errors"
+
+var (
+	// ErrRuntimeExecuting indicates that the runtime is already executing and cannot accept another invocation.
+	ErrRuntimeExecuting = errors.New("runtime is already executing")
+	// ErrStartEdgeNil indicates that the provided start edge is nil.
+	ErrStartEdgeNil = errors.New("start edge cannot be nil")
+	// ErrStartNodeNil indicates that the start node is nil.
+	ErrStartNodeNil = errors.New("start node cannot be nil")
+	// ErrNoPathToEnd indicates that there is no path from the start edge to any end edge.
+	ErrNoPathToEnd = errors.New("no path from start edge to any end edge")
+	// ErrRestoreNotSet indicates that the restore function is not set.
+	ErrRestoreNotSet = errors.New("restore function is not set")
+	// ErrRuntimeIDNotSet indicates that the runtime identity is not set.
+	ErrRuntimeIDNotSet = errors.New("runtime identity is not set")
+	// ErrPersistenceQueueFull indicates that the persistence queue is full.
+	ErrPersistenceQueueFull = errors.New("persistence queue is full")
+)
+
 // Connected provides methods for building and validating the graph structure.
 //
 // This interface allows you to add edges to construct the graph topology and
@@ -86,6 +105,9 @@ type Connected[T SharedState] interface {
 //	    }
 //	}
 type Runtime[T SharedState] interface {
+	// Embeds StateObserver to provide state change notification capabilities.
+	StateObserver[T]
+
 	// Embeds Connected to provide graph construction and validation methods.
 	Connected[T]
 
