@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"context"
 	"errors"
 
 	"github.com/google/uuid"
@@ -91,6 +92,8 @@ type Connected[T SharedState] interface {
 type InvokeConfig struct {
 	// ThreadID is the identifier for the thread executing the invocation.
 	ThreadID string
+	// Context is the context for the invocation.
+	Context context.Context
 }
 
 // MergeInvokeConfig merges multiple InvokeConfig instances into one.
@@ -118,6 +121,9 @@ func MergeInvokeConfig(config ...InvokeConfig) InvokeConfig {
 		if c.ThreadID != "" {
 			merged.ThreadID = c.ThreadID
 		}
+		if c.Context != nil {
+			merged.Context = c.Context
+		}
 	}
 	return merged
 }
@@ -137,10 +143,11 @@ func MergeInvokeConfig(config ...InvokeConfig) InvokeConfig {
 func DefaultInvokeConfig() InvokeConfig {
 	return InvokeConfig{
 		ThreadID: uuid.NewString(),
+		Context:  context.TODO(),
 	}
 }
 
-// ConfigThreadID creates an InvokeConfig with the specified ThreadID.
+// ConfigInvokeThreadID creates an InvokeConfig with the specified ThreadID.
 //
 // This helper function simplifies the creation of an InvokeConfig when only
 // the ThreadID needs to be set.
@@ -152,10 +159,30 @@ func DefaultInvokeConfig() InvokeConfig {
 //
 // Example:
 //
-//	threadConfig := ConfigThreadID("custom-thread-1")
+//	threadConfig := ConfigInvokeThreadID("custom-thread-1")
 //	runtime.Invoke(userInput, threadConfig)
-func ConfigThreadID(threadID string) InvokeConfig {
+func ConfigInvokeThreadID(threadID string) InvokeConfig {
 	return InvokeConfig{ThreadID: threadID}
+}
+
+// ConfigInvokeContext creates an InvokeConfig with the specified Context.
+//
+// This helper function simplifies the creation of an InvokeConfig when only
+// the Context needs to be set.
+//
+// Parameters:
+//   - ctx: The context for the invocation.
+//
+// Returns:
+//   - An InvokeConfig instance with the specified Context.
+//
+// Example:
+//
+//	ctx := context.WithValue(context.Background(), "key", "value")
+//	contextConfig := ConfigInvokeContext(ctx)
+//	runtime.Invoke(userInput, contextConfig)
+func ConfigInvokeContext(ctx context.Context) InvokeConfig {
+	return InvokeConfig{Context: ctx}
 }
 
 // Runtime represents the execution engine for graph-based workflows.
@@ -244,8 +271,6 @@ type Runtime[T SharedState] interface {
 	//	    }
 	//	}
 	Invoke(userInput T, config ...InvokeConfig) string
-	// TODO invoke with context
-	// InvokeWithContext(ctx context.Context, entryState T)
 
 	// Shutdown gracefully stops the runtime and cleans up resources.
 	//

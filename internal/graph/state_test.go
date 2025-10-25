@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/uuid"
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
 
@@ -22,10 +23,20 @@ func TestMonitorRunning_BasicState(t *testing.T) {
 		Counter: 42,
 	}
 
-	entry := monitorRunning("test-node", state)
+	threadID := uuid.NewString()
+
+	entry := monitorRunning("test-node", threadID, state)
 
 	if entry.Node != "test-node" {
 		t.Errorf("Expected Node='test-node', got '%s'", entry.Node)
+	}
+
+	if entry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, entry.ThreadID)
+	}
+
+	if entry.ThreadID == "" {
+		t.Error("Expected ThreadID to be non-empty")
 	}
 
 	if !entry.Running {
@@ -52,10 +63,16 @@ func TestMonitorRunning_BasicState(t *testing.T) {
 func TestMonitorRunning_EmptyState(t *testing.T) {
 	state := StateTestState{}
 
-	entry := monitorRunning("empty-node", state)
+	threadID := uuid.NewString()
+
+	entry := monitorRunning("empty-node", threadID, state)
 
 	if entry.Node != "empty-node" {
 		t.Errorf("Expected Node='empty-node', got '%s'", entry.Node)
+	}
+
+	if entry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, entry.ThreadID)
 	}
 
 	if !entry.Running {
@@ -81,10 +98,16 @@ func TestMonitorRunning_ComplexState(t *testing.T) {
 		},
 	}
 
-	entry := monitorRunning("complex-node", state)
+	threadID := uuid.NewString()
+
+	entry := monitorRunning("complex-node", threadID, state)
 
 	if entry.Node != "complex-node" {
 		t.Errorf("Expected Node='complex-node', got '%s'", entry.Node)
+	}
+
+	if entry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, entry.ThreadID)
 	}
 
 	if !entry.Running {
@@ -109,10 +132,16 @@ func TestMonitorRunning_ComplexState(t *testing.T) {
 func TestMonitorNonFatalError_WithError(t *testing.T) {
 	testErr := errors.New("non-fatal error occurred")
 
-	entry := monitorNonFatalError[StateTestState]("error-node", testErr)
+	threadID := uuid.NewString()
+
+	entry := monitorNonFatalError[StateTestState]("error-node", threadID, testErr)
 
 	if entry.Node != "error-node" {
 		t.Errorf("Expected Node='error-node', got '%s'", entry.Node)
+	}
+
+	if entry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, entry.ThreadID)
 	}
 
 	if !entry.Running {
@@ -144,8 +173,14 @@ func TestMonitorNonFatalError_DifferentErrors(t *testing.T) {
 		errors.New("timeout"),
 	}
 
+	threadID := uuid.NewString()
+
 	for i, err := range errors {
-		entry := monitorNonFatalError[StateTestState]("node", err)
+		entry := monitorNonFatalError[StateTestState]("node", threadID, err)
+
+		if entry.ThreadID != threadID {
+			t.Errorf("Test %d: Expected ThreadID='%s', got '%s'", i, threadID, entry.ThreadID)
+		}
 
 		if !entry.Running {
 			t.Errorf("Test %d: Expected Running=true", i)
@@ -162,10 +197,16 @@ func TestMonitorNonFatalError_DifferentErrors(t *testing.T) {
 func TestMonitorError_WithError(t *testing.T) {
 	testErr := errors.New("fatal error occurred")
 
-	entry := monitorError[StateTestState]("fatal-node", testErr)
+	threadID := uuid.NewString()
+
+	entry := monitorError[StateTestState]("fatal-node", threadID, testErr)
 
 	if entry.Node != "fatal-node" {
 		t.Errorf("Expected Node='fatal-node', got '%s'", entry.Node)
+	}
+
+	if entry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, entry.ThreadID)
 	}
 
 	if entry.Running {
@@ -188,7 +229,13 @@ func TestMonitorError_WithError(t *testing.T) {
 func TestMonitorError_StopsExecution(t *testing.T) {
 	testErr := errors.New("stop execution")
 
-	entry := monitorError[StateTestState]("stop-node", testErr)
+	threadID := uuid.NewString()
+
+	entry := monitorError[StateTestState]("stop-node", threadID, testErr)
+
+	if entry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, entry.ThreadID)
+	}
 
 	// The key difference from non-fatal is Running=false
 	if entry.Running {
@@ -199,8 +246,18 @@ func TestMonitorError_StopsExecution(t *testing.T) {
 func TestMonitorError_VsNonFatalError(t *testing.T) {
 	testErr := errors.New("test error")
 
-	nonFatalEntry := monitorNonFatalError[StateTestState]("node", testErr)
-	fatalEntry := monitorError[StateTestState]("node", testErr)
+	threadID := uuid.NewString()
+
+	nonFatalEntry := monitorNonFatalError[StateTestState]("node", threadID, testErr)
+	fatalEntry := monitorError[StateTestState]("node", threadID, testErr)
+
+	// Both should have the same thread ID
+	if nonFatalEntry.ThreadID != threadID {
+		t.Errorf("Expected non-fatal ThreadID='%s', got '%s'", threadID, nonFatalEntry.ThreadID)
+	}
+	if fatalEntry.ThreadID != threadID {
+		t.Errorf("Expected fatal ThreadID='%s', got '%s'", threadID, fatalEntry.ThreadID)
+	}
 
 	// Both should have the same error
 	if nonFatalEntry.Error != fatalEntry.Error {
@@ -225,10 +282,16 @@ func TestMonitorPartial_BasicState(t *testing.T) {
 		Counter: 5,
 	}
 
-	entry := monitorPartial("partial-node", state)
+	threadID := uuid.NewString()
+
+	entry := monitorPartial("partial-node", threadID, state)
 
 	if entry.Node != "partial-node" {
 		t.Errorf("Expected Node='partial-node', got '%s'", entry.Node)
+	}
+
+	if entry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, entry.ThreadID)
 	}
 
 	if !entry.Running {
@@ -255,8 +318,14 @@ func TestMonitorPartial_MultipleUpdates(t *testing.T) {
 		{Value: "update3", Counter: 3},
 	}
 
+	threadID := uuid.NewString()
+
 	for i, state := range states {
-		entry := monitorPartial("node", state)
+		entry := monitorPartial("node", threadID, state)
+
+		if entry.ThreadID != threadID {
+			t.Errorf("Update %d: Expected ThreadID='%s', got '%s'", i, threadID, entry.ThreadID)
+		}
 
 		if !entry.Partial {
 			t.Errorf("Update %d: Expected Partial=true", i)
@@ -275,8 +344,15 @@ func TestMonitorPartial_MultipleUpdates(t *testing.T) {
 func TestMonitorPartial_VsRunning(t *testing.T) {
 	state := StateTestState{Value: "test", Counter: 10}
 
-	partialEntry := monitorPartial("node", state)
-	runningEntry := monitorRunning("node", state)
+	threadID := uuid.NewString()
+
+	partialEntry := monitorPartial("node", threadID, state)
+	runningEntry := monitorRunning("node", threadID, state)
+
+	// Both should have the same thread ID
+	if partialEntry.ThreadID != threadID || runningEntry.ThreadID != threadID {
+		t.Errorf("Both entries should have ThreadID='%s'", threadID)
+	}
 
 	// Both should be running
 	if !partialEntry.Running || !runningEntry.Running {
@@ -309,10 +385,16 @@ func TestMonitorCompleted_BasicState(t *testing.T) {
 		Counter: 100,
 	}
 
-	entry := monitorCompleted("completed-node", state)
+	threadID := uuid.NewString()
+
+	entry := monitorCompleted("completed-node", threadID, state)
 
 	if entry.Node != "completed-node" {
 		t.Errorf("Expected Node='completed-node', got '%s'", entry.Node)
+	}
+
+	if entry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, entry.ThreadID)
 	}
 
 	if entry.Running {
@@ -345,7 +427,13 @@ func TestMonitorCompleted_FinalState(t *testing.T) {
 		},
 	}
 
-	entry := monitorCompleted("final-node", state)
+	threadID := uuid.NewString()
+
+	entry := monitorCompleted("final-node", threadID, state)
+
+	if entry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, entry.ThreadID)
+	}
 
 	if entry.Running {
 		t.Error("Expected Running=false, execution should be complete")
@@ -363,8 +451,15 @@ func TestMonitorCompleted_FinalState(t *testing.T) {
 func TestMonitorCompleted_VsRunning(t *testing.T) {
 	state := StateTestState{Value: "test", Counter: 50}
 
-	completedEntry := monitorCompleted("node", state)
-	runningEntry := monitorRunning("node", state)
+	threadID := uuid.NewString()
+
+	completedEntry := monitorCompleted("node", threadID, state)
+	runningEntry := monitorRunning("node", threadID, state)
+
+	// Both should have the same thread ID
+	if completedEntry.ThreadID != threadID || runningEntry.ThreadID != threadID {
+		t.Errorf("Both entries should have ThreadID='%s'", threadID)
+	}
 
 	// Running should be different
 	if completedEntry.Running {
@@ -395,20 +490,31 @@ func TestMonitorFunctions_AllNodeNames(t *testing.T) {
 	state := StateTestState{Value: "test"}
 	nodeNames := []string{"node1", "processing-unit", "validator", "end"}
 
+	threadID := uuid.NewString()
+
 	for _, nodeName := range nodeNames {
-		runningEntry := monitorRunning(nodeName, state)
+		runningEntry := monitorRunning(nodeName, threadID, state)
 		if runningEntry.Node != nodeName {
 			t.Errorf("MonitorRunning: expected Node='%s', got '%s'", nodeName, runningEntry.Node)
 		}
+		if runningEntry.ThreadID != threadID {
+			t.Errorf("MonitorRunning: expected ThreadID='%s', got '%s'", threadID, runningEntry.ThreadID)
+		}
 
-		partialEntry := monitorPartial(nodeName, state)
+		partialEntry := monitorPartial(nodeName, threadID, state)
 		if partialEntry.Node != nodeName {
 			t.Errorf("MonitorPartial: expected Node='%s', got '%s'", nodeName, partialEntry.Node)
 		}
+		if partialEntry.ThreadID != threadID {
+			t.Errorf("MonitorPartial: expected ThreadID='%s', got '%s'", threadID, partialEntry.ThreadID)
+		}
 
-		completedEntry := monitorCompleted(nodeName, state)
+		completedEntry := monitorCompleted(nodeName, threadID, state)
 		if completedEntry.Node != nodeName {
 			t.Errorf("MonitorCompleted: expected Node='%s', got '%s'", nodeName, completedEntry.Node)
+		}
+		if completedEntry.ThreadID != threadID {
+			t.Errorf("MonitorCompleted: expected ThreadID='%s', got '%s'", threadID, completedEntry.ThreadID)
 		}
 	}
 }
@@ -416,6 +522,8 @@ func TestMonitorFunctions_AllNodeNames(t *testing.T) {
 func TestMonitorFunctions_CompareRunningAndPartialFlags(t *testing.T) {
 	state := StateTestState{Value: "test", Counter: 10}
 	node := "test-node"
+
+	threadID := uuid.NewString()
 
 	testCases := []struct {
 		name             string
@@ -426,21 +534,21 @@ func TestMonitorFunctions_CompareRunningAndPartialFlags(t *testing.T) {
 	}{
 		{
 			name:             "monitorRunning",
-			createEntry:      func() g.StateMonitorEntry[StateTestState] { return monitorRunning(node, state) },
+			createEntry:      func() g.StateMonitorEntry[StateTestState] { return monitorRunning(node, threadID, state) },
 			expectedRunning:  true,
 			expectedPartial:  false,
 			expectedHasError: false,
 		},
 		{
 			name:             "monitorPartial",
-			createEntry:      func() g.StateMonitorEntry[StateTestState] { return monitorPartial(node, state) },
+			createEntry:      func() g.StateMonitorEntry[StateTestState] { return monitorPartial(node, threadID, state) },
 			expectedRunning:  true,
 			expectedPartial:  true,
 			expectedHasError: false,
 		},
 		{
 			name:             "monitorCompleted",
-			createEntry:      func() g.StateMonitorEntry[StateTestState] { return monitorCompleted(node, state) },
+			createEntry:      func() g.StateMonitorEntry[StateTestState] { return monitorCompleted(node, threadID, state) },
 			expectedRunning:  false,
 			expectedPartial:  false,
 			expectedHasError: false,
@@ -448,7 +556,7 @@ func TestMonitorFunctions_CompareRunningAndPartialFlags(t *testing.T) {
 		{
 			name: "monitorNonFatalError",
 			createEntry: func() g.StateMonitorEntry[StateTestState] {
-				return monitorNonFatalError[StateTestState](node, errors.New("test"))
+				return monitorNonFatalError[StateTestState](node, threadID, errors.New("test"))
 			},
 			expectedRunning:  true,
 			expectedPartial:  false,
@@ -457,7 +565,7 @@ func TestMonitorFunctions_CompareRunningAndPartialFlags(t *testing.T) {
 		{
 			name: "monitorError",
 			createEntry: func() g.StateMonitorEntry[StateTestState] {
-				return monitorError[StateTestState](node, errors.New("test"))
+				return monitorError[StateTestState](node, threadID, errors.New("test"))
 			},
 			expectedRunning:  false,
 			expectedPartial:  false,
@@ -489,25 +597,36 @@ func TestMonitorFunctions_ExecutionLifecycle(t *testing.T) {
 	// Simulate a typical execution lifecycle
 	nodeName := "processing-node"
 
+	threadID := uuid.NewString()
+
 	// 1. Node starts executing
-	runningEntry := monitorRunning(nodeName, StateTestState{Counter: 0})
+	runningEntry := monitorRunning(nodeName, threadID, StateTestState{Counter: 0})
+	if runningEntry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, runningEntry.ThreadID)
+	}
 	if !runningEntry.Running || runningEntry.Partial {
 		t.Error("Initial execution should have Running=true, Partial=false")
 	}
 
 	// 2. Node sends partial updates
-	partial1 := monitorPartial(nodeName, StateTestState{Counter: 1})
-	partial2 := monitorPartial(nodeName, StateTestState{Counter: 2})
-	partial3 := monitorPartial(nodeName, StateTestState{Counter: 3})
+	partial1 := monitorPartial(nodeName, threadID, StateTestState{Counter: 1})
+	partial2 := monitorPartial(nodeName, threadID, StateTestState{Counter: 2})
+	partial3 := monitorPartial(nodeName, threadID, StateTestState{Counter: 3})
 
 	for i, entry := range []g.StateMonitorEntry[StateTestState]{partial1, partial2, partial3} {
+		if entry.ThreadID != threadID {
+			t.Errorf("Partial update %d: expected ThreadID='%s', got '%s'", i+1, threadID, entry.ThreadID)
+		}
 		if !entry.Running || !entry.Partial {
 			t.Errorf("Partial update %d should have Running=true, Partial=true", i+1)
 		}
 	}
 
 	// 3. Node completes successfully
-	completedEntry := monitorCompleted(nodeName, StateTestState{Counter: 10})
+	completedEntry := monitorCompleted(nodeName, threadID, StateTestState{Counter: 10})
+	if completedEntry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, completedEntry.ThreadID)
+	}
 	if completedEntry.Running || completedEntry.Partial {
 		t.Error("Completion should have Running=false, Partial=false")
 	}
@@ -516,14 +635,22 @@ func TestMonitorFunctions_ExecutionLifecycle(t *testing.T) {
 func TestMonitorFunctions_ErrorScenarios(t *testing.T) {
 	nodeName := "error-node"
 
+	threadID := uuid.NewString()
+
 	// Scenario 1: Non-fatal error during execution (can continue)
-	nonFatalEntry := monitorNonFatalError[StateTestState](nodeName, errors.New("retry possible"))
+	nonFatalEntry := monitorNonFatalError[StateTestState](nodeName, threadID, errors.New("retry possible"))
+	if nonFatalEntry.ThreadID != threadID {
+		t.Errorf("Expected non-fatal ThreadID='%s', got '%s'", threadID, nonFatalEntry.ThreadID)
+	}
 	if !nonFatalEntry.Running {
 		t.Error("Non-fatal error should allow continued execution (Running=true)")
 	}
 
 	// Scenario 2: Fatal error stops execution
-	fatalEntry := monitorError[StateTestState](nodeName, errors.New("critical failure"))
+	fatalEntry := monitorError[StateTestState](nodeName, threadID, errors.New("critical failure"))
+	if fatalEntry.ThreadID != threadID {
+		t.Errorf("Expected fatal ThreadID='%s', got '%s'", threadID, fatalEntry.ThreadID)
+	}
 	if fatalEntry.Running {
 		t.Error("Fatal error should stop execution (Running=false)")
 	}
@@ -547,17 +674,28 @@ func TestMonitorFunctions_DifferentStateTypes(t *testing.T) {
 		Results: []int{1, 2, 3},
 	}
 
-	runningEntry := monitorRunning("node", state)
+	threadID := uuid.NewString()
+
+	runningEntry := monitorRunning("node", threadID, state)
+	if runningEntry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, runningEntry.ThreadID)
+	}
 	if runningEntry.NewState.Name != "test" {
 		t.Errorf("Expected Name='test', got '%s'", runningEntry.NewState.Name)
 	}
 
-	completedEntry := monitorCompleted("node", state)
+	completedEntry := monitorCompleted("node", threadID, state)
+	if completedEntry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, completedEntry.ThreadID)
+	}
 	if completedEntry.NewState.Active != true {
 		t.Error("Expected Active=true")
 	}
 
-	partialEntry := monitorPartial("node", state)
+	partialEntry := monitorPartial("node", threadID, state)
+	if partialEntry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, partialEntry.ThreadID)
+	}
 	if len(partialEntry.NewState.Results) != 3 {
 		t.Errorf("Expected Results length=3, got %d", len(partialEntry.NewState.Results))
 	}
@@ -566,21 +704,34 @@ func TestMonitorFunctions_DifferentStateTypes(t *testing.T) {
 func TestMonitorFunctions_EmptyNodeName(t *testing.T) {
 	state := StateTestState{Value: "test"}
 
+	threadID := uuid.NewString()
+
 	// Test with empty node name
-	entry := monitorRunning("", state)
+	entry := monitorRunning("", threadID, state)
 	if entry.Node != "" {
 		t.Errorf("Expected empty Node, got '%s'", entry.Node)
+	}
+	if entry.ThreadID != threadID {
+		t.Errorf("Expected ThreadID='%s', got '%s'", threadID, entry.ThreadID)
 	}
 }
 
 func TestMonitorFunctions_NilError(t *testing.T) {
+	threadID := uuid.NewString()
+
 	// These functions should handle nil errors gracefully
-	nonFatalEntry := monitorNonFatalError[StateTestState]("node", nil)
+	nonFatalEntry := monitorNonFatalError[StateTestState]("node", threadID, nil)
+	if nonFatalEntry.ThreadID != threadID {
+		t.Errorf("Expected non-fatal ThreadID='%s', got '%s'", threadID, nonFatalEntry.ThreadID)
+	}
 	if nonFatalEntry.Error != nil {
 		t.Error("Expected Error=nil when nil is passed")
 	}
 
-	fatalEntry := monitorError[StateTestState]("node", nil)
+	fatalEntry := monitorError[StateTestState]("node", threadID, nil)
+	if fatalEntry.ThreadID != threadID {
+		t.Errorf("Expected fatal ThreadID='%s', got '%s'", threadID, fatalEntry.ThreadID)
+	}
 	if fatalEntry.Error != nil {
 		t.Error("Expected Error=nil when nil is passed")
 	}

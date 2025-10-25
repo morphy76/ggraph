@@ -68,32 +68,39 @@ func main() {
 		log.Fatalf("Graph validation failed: %v", err)
 	}
 
-	invocationConfig := g.ConfigInvokeThreadID(uuid.NewString())
+	invocationConfig1 := g.ConfigInvokeThreadID(uuid.NewString())
+	invocationConfig2 := g.ConfigInvokeThreadID(uuid.NewString())
 
-	myGraph.Invoke(myState{op: "+", num2: 5}, invocationConfig)
-	for {
+	myGraph.Invoke(myState{op: "+", num2: 5}, invocationConfig1)
+	myGraph.Invoke(myState{op: "+", num2: 5}, invocationConfig2)
+	twice := 2
+	for twice > 0 {
 		entry := <-stateMonitorCh
 		if !entry.Running {
-			fmt.Printf("State Monitor Node: %s Entry: %+v Error: %v\n", entry.Node, entry.NewState.Result, entry.Error)
-			break
+			twice--
+			fmt.Printf("State Monitor Node: %s Thread: %s Entry: %+v Error: %v\n", entry.Node, entry.ThreadID, entry.NewState.Result, entry.Error)
 		}
 	}
 
-	myGraph.Invoke(myState{op: "-", num2: 5}, invocationConfig)
-	for {
+	twice = 2
+	myGraph.Invoke(myState{op: "-", num2: 5}, invocationConfig1)
+	myGraph.Invoke(myState{op: "-", num2: 5}, invocationConfig2)
+	for twice > 0 {
 		entry := <-stateMonitorCh
 		if !entry.Running {
-			fmt.Printf("State Monitor Node: %s Entry: %+v Error: %v\n", entry.Node, entry.NewState.Result, entry.Error)
-			break
+			twice--
+			fmt.Printf("State Monitor Node: %s Thread: %s Entry: %+v Error: %v\n", entry.Node, entry.ThreadID, entry.NewState.Result, entry.Error)
 		}
 	}
 
-	myGraph.Invoke(myState{op: "-", num2: 10}, invocationConfig)
-	for {
+	twice = 2
+	myGraph.Invoke(myState{op: "-", num2: 10}, invocationConfig1)
+	myGraph.Invoke(myState{op: "-", num2: 10}, invocationConfig2)
+	for twice > 0 {
 		entry := <-stateMonitorCh
 		if !entry.Running {
-			fmt.Printf("State Monitor Node: %s Entry: %+v Error: %v\n", entry.Node, entry.NewState.Result, entry.Error)
-			break
+			twice--
+			fmt.Printf("State Monitor Node: %s Thread: %s Entry: %+v Error: %v\n", entry.Node, entry.ThreadID, entry.NewState.Result, entry.Error)
 		}
 	}
 }

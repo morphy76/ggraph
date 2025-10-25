@@ -157,20 +157,15 @@ func main() {
 	}
 
 	// Configure persistence with runtime ID
-	invokeConfig := g.ConfigThreadID(uuid.NewString())
+	invokeConfig := g.ConfigInvokeThreadID(uuid.NewString())
 	runtime.SetPersistentState(
 		persistence.Persist,
 		persistence.Restore,
 	)
 
-	// Try to restore previous state
-	fmt.Println("\n=== Attempting to restore previous state ===")
-	if err := runtime.Restore(invokeConfig.ThreadID); err != nil {
-		fmt.Printf("⚠️  No previous state to restore: %v\n", err)
-		fmt.Println("Starting fresh game...")
-	} else {
-		fmt.Println("✅ Previous state restored! Continuing from where we left off...")
-	}
+	// The runtime will automatically try to restore state on first invoke
+	// If no state exists, it will start with initial state
+	fmt.Println("\n=== Starting game (will auto-restore if previous state exists) ===")
 
 	runtime.Invoke(gameState{}, invokeConfig)
 

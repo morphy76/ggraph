@@ -51,6 +51,8 @@ type SharedState interface {
 type StateMonitorEntry[T SharedState] struct {
 	// Node is the name of the node that just executed or attempted to execute.
 	Node string
+	// ThreadID is the identifier of the thread executing this node.
+	ThreadID string
 	// NewState is the state after the node's execution function completed.
 	NewState T
 	// Error is any error that occurred during node execution. nil if successful.

@@ -30,7 +30,7 @@ func RuntimeFactory[T g.SharedState](
 		ctx:    ctx,
 		cancel: cancelFn,
 
-		outcomeCh:      make(chan nodeFnReturnStruct[T], 10),
+		outcomeCh:      make(chan nodeFnReturnStruct[T], 1000),
 		stateMonitorCh: stateMonitorCh,
 
 		startEdge: startEdge,
@@ -103,16 +103,13 @@ func (r *runtimeImpl[T]) Invoke(userInput T, configs ...g.InvokeConfig) string {
 	useConfig := g.MergeInvokeConfig(g.DefaultInvokeConfig(), requestedConfig)
 
 	if !r.threadExistsWithinTTL(useConfig.ThreadID) {
-		if err := r.Restore(useConfig.ThreadID); err != nil {
-			r.sendMonitorEntry(monitorError[T]("Runtime", fmt.Errorf("failed to restore thread %s: %w", useConfig.ThreadID, err)))
-			return useConfig.ThreadID
-		}
+		_ = r.Restore(useConfig.ThreadID)
 	}
 
 	r.threadTTL[useConfig.ThreadID] = time.Now().Add(1 * time.Hour)
 
 	if !r.executingByThreadID(useConfig).CompareAndSwap(false, true) {
-		r.sendMonitorEntry(monitorError[T]("Runtime", fmt.Errorf("cannot invoke graph: %w", g.ErrRuntimeExecuting)))
+		r.sendMonitorEntry(monitorError[T]("Runtime", useConfig.ThreadID, fmt.Errorf("cannot invoke graph for thread %s: %w", useConfig.ThreadID, g.ErrRuntimeExecuting)))
 		return useConfig.ThreadID
 	}
 
@@ -238,9 +235,9 @@ func (r *runtimeImpl[T]) persistState(threadID string) error {
 	select {
 	case r.pendingPersist <- pendingPersistEntry[T]{threadID: threadID, state: currentState}:
 	case <-ctx.Done():
-		r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", fmt.Errorf("persistence timed out: %w", ctx.Err())))
+		r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", threadID, fmt.Errorf("persistence timed out: %w", ctx.Err())))
 	default:
-		r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", fmt.Errorf("cannot persist state: %w", g.ErrPersistenceQueueFull)))
+		r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", threadID, fmt.Errorf("cannot persist state: %w", g.ErrPersistenceQueueFull)))
 	}
 
 	return nil
@@ -257,66 +254,74 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 			return
 		case result := <-r.outcomeCh:
 			useThreadID := result.config.ThreadID
+			useInvocationContext := result.config.Context
 			useExecuting := r.executingByThreadID(result.config)
 
 			if result.err != nil {
-				r.sendMonitorEntry(monitorError[T](result.node.Name(), result.err))
+				r.sendMonitorEntry(monitorError[T](result.node.Name(), useThreadID, result.err))
 				useExecuting.Store(false)
 				continue
 			}
 
-			if result.partial {
-				r.sendMonitorEntry(monitorPartial(result.node.Name(), result.stateChange))
+			select {
+			case <-useInvocationContext.Done():
+				r.sendMonitorEntry(monitorError[T](result.node.Name(), useThreadID, fmt.Errorf("invocation context done: %w", useInvocationContext.Err())))
+				useExecuting.Store(false)
 				continue
-			}
+			default:
+				if result.partial {
+					r.sendMonitorEntry(monitorPartial(result.node.Name(), useThreadID, result.stateChange))
+					continue
+				}
 
-			newState := r.replace(useThreadID, result.stateChange, result.reducer)
-			err := r.persistState(useThreadID)
-			if err != nil {
-				r.sendMonitorEntry(monitorNonFatalError[T](result.node.Name(), fmt.Errorf("state persistence error: %w", err)))
-			}
+				newState := r.replace(useThreadID, result.stateChange, result.reducer)
+				err := r.persistState(useThreadID)
+				if err != nil {
+					r.sendMonitorEntry(monitorNonFatalError[T](result.node.Name(), useThreadID, fmt.Errorf("state persistence error: %w", err)))
+				}
 
-			if result.node.Role() == g.EndNode {
-				if r.stateMonitorCh != nil {
-					r.sendMonitorEntry(monitorCompleted(result.node.Name(), newState))
+				if result.node.Role() == g.EndNode {
+					if r.stateMonitorCh != nil {
+						r.sendMonitorEntry(monitorCompleted(result.node.Name(), useThreadID, newState))
+						useExecuting.Store(false)
+					}
+					continue
+				} else {
+					if r.stateMonitorCh != nil {
+						r.sendMonitorEntry(monitorRunning(result.node.Name(), useThreadID, newState))
+					}
+				}
+
+				outboundEdges := r.edgesFrom(result.node)
+				if len(outboundEdges) == 0 {
+					r.sendMonitorEntry(monitorError[T](result.node.Name(), useThreadID, fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNoOutboundEdges)))
 					useExecuting.Store(false)
+					continue
 				}
-				continue
-			} else {
-				if r.stateMonitorCh != nil {
-					r.sendMonitorEntry(monitorRunning(result.node.Name(), newState))
+
+				policy := result.node.RoutePolicy()
+				if policy == nil {
+					r.sendMonitorEntry(monitorError[T](result.node.Name(), useThreadID, fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNoRoutingPolicy)))
+					useExecuting.Store(false)
+					continue
 				}
-			}
 
-			outboundEdges := r.edgesFrom(result.node)
-			if len(outboundEdges) == 0 {
-				r.sendMonitorEntry(monitorError[T](result.node.Name(), fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNoOutboundEdges)))
-				useExecuting.Store(false)
-				continue
-			}
+				nextEdge := policy.SelectEdge(result.userInput, r.state[useThreadID], outboundEdges)
+				if nextEdge == nil {
+					r.sendMonitorEntry(monitorError[T](result.node.Name(), useThreadID, fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNilEdge)))
+					useExecuting.Store(false)
+					continue
+				}
 
-			policy := result.node.RoutePolicy()
-			if policy == nil {
-				r.sendMonitorEntry(monitorError[T](result.node.Name(), fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNoRoutingPolicy)))
-				useExecuting.Store(false)
-				continue
-			}
+				nextNode := nextEdge.To()
+				if nextNode == nil {
+					r.sendMonitorEntry(monitorError[T](result.node.Name(), useThreadID, fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNextEdgeNil)))
+					useExecuting.Store(false)
+					continue
+				}
 
-			nextEdge := policy.SelectEdge(result.userInput, r.state[useThreadID], outboundEdges)
-			if nextEdge == nil {
-				r.sendMonitorEntry(monitorError[T](result.node.Name(), fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNilEdge)))
-				useExecuting.Store(false)
-				continue
+				nextNode.Accept(result.userInput, r, result.config)
 			}
-
-			nextNode := nextEdge.To()
-			if nextNode == nil {
-				r.sendMonitorEntry(monitorError[T](result.node.Name(), fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNextEdgeNil)))
-				useExecuting.Store(false)
-				continue
-			}
-
-			nextNode.Accept(result.userInput, r, result.config)
 		}
 	}
 }
@@ -410,7 +415,7 @@ func (r *runtimeImpl[T]) persistenceWorker() {
 			return
 		case state := <-r.pendingPersist:
 			if err := r.persistFn(r.ctx, state.threadID, state.state); err != nil {
-				r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", fmt.Errorf("state persistence error: %w", err)))
+				r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", state.threadID, fmt.Errorf("state persistence error: %w", err)))
 			} else {
 				useLock := r.lockByThreadID(state.threadID)
 				useLock.Lock()
@@ -447,14 +452,14 @@ func (r *runtimeImpl[T]) threadEvictor() {
 
 					err := r.persistState(threadID)
 					if err != nil {
-						r.sendMonitorEntry(monitorNonFatalError[T]("ThreadEvictor", fmt.Errorf("state persistence error during eviction: %w", err)))
+						r.sendMonitorEntry(monitorNonFatalError[T]("ThreadEvictor", threadID, fmt.Errorf("state persistence error during eviction: %w", err)))
 					}
 
 					delete(r.executing, threadID)
 					delete(r.lastPersisted, threadID)
 					delete(r.stateChangeLock, threadID)
 
-					r.sendMonitorEntry(monitorNonFatalError[T]("ThreadEvictor", fmt.Errorf("evicted thread %s: %w", threadID, g.ErrEvictionByInactivity)))
+					r.sendMonitorEntry(monitorNonFatalError[T]("ThreadEvictor", threadID, fmt.Errorf("evicted thread %s: %w", threadID, g.ErrEvictionByInactivity)))
 				}
 			}
 		}
@@ -466,7 +471,7 @@ func (r *runtimeImpl[T]) flushPendingStates() {
 		select {
 		case state := <-r.pendingPersist:
 			if err := r.persistFn(r.ctx, state.threadID, state.state); err != nil {
-				r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", fmt.Errorf("state persistence error during flush: %w", err)))
+				r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", state.threadID, fmt.Errorf("state persistence error during flush: %w", err)))
 			}
 		default:
 			return

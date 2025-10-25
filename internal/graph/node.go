@@ -54,6 +54,7 @@ func (n *nodeImpl[T]) Name() string {
 
 func (n *nodeImpl[T]) Accept(userInput T, runtime g.StateObserver[T], config g.InvokeConfig) {
 	useThreadID := config.ThreadID
+
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -71,7 +72,7 @@ func (n *nodeImpl[T]) Accept(userInput T, runtime g.StateObserver[T], config g.I
 			}
 			runtime.NotifyStateChange(n, config, userInput, stateChange, n.reducer, nil, false)
 		case <-ctx.Done():
-			runtime.NotifyStateChange(n, config, userInput, runtime.CurrentState(useThreadID), n.reducer, fmt.Errorf("timeout executing node %s: %w", n.name, ctx.Err()), false)
+			runtime.NotifyStateChange(n, config, userInput, runtime.CurrentState(useThreadID), n.reducer, fmt.Errorf("error executing node %s: %w", n.name, ctx.Err()), false)
 			return
 		}
 	}()
