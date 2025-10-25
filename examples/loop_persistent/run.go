@@ -81,9 +81,24 @@ func (fp *filePersistence) Restore(ctx context.Context, threadID string) (gameSt
 	return state, nil
 }
 
+var _ g.Memory[gameState] = (*fileMemory)(nil)
+
+type fileMemory struct {
+	persistence *filePersistence
+}
+
+func (m *fileMemory) PersistFn() g.PersistFn[gameState] {
+	return m.persistence.Persist
+}
+
+func (m *fileMemory) RestoreFn() g.RestoreFn[gameState] {
+	return m.persistence.Restore
+}
+
 func main() {
 	stateDir := "game_states"
 	persistence := newFilePersistence(stateDir)
+	memory := &fileMemory{persistence: persistence}
 
 	// Node 1: Determine target number
 	initNode, _ := b.NewNodeBuilder("InitNode", func(userInput gameState, currentState gameState, notifyPartial g.NotifyPartialFn[gameState]) (gameState, error) {
@@ -158,10 +173,7 @@ func main() {
 
 	// Configure persistence with runtime ID
 	invokeConfig := g.InvokeConfigThreadID(uuid.NewString())
-	runtime.SetPersistentState(
-		persistence.Persist,
-		persistence.Restore,
-	)
+	runtime.SetMemory(memory)
 
 	// The runtime will automatically try to restore state on first invoke
 	// If no state exists, it will start with initial state

@@ -187,12 +187,9 @@ func (r *runtimeImpl[T]) StartEdge() g.Edge[T] {
 	return r.startEdge
 }
 
-func (r *runtimeImpl[T]) SetPersistentState(
-	persist g.PersistFn[T],
-	restore g.RestoreFn[T],
-) {
-	r.persistFn = persist
-	r.restoreFn = restore
+func (r *runtimeImpl[T]) SetMemory(memory g.Memory[T]) {
+	r.persistFn = memory.PersistFn()
+	r.restoreFn = memory.RestoreFn()
 }
 
 func (r *runtimeImpl[T]) Restore(threadID string) error {

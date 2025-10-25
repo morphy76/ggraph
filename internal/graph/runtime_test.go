@@ -421,6 +421,23 @@ func TestRuntime_CurrentState(t *testing.T) {
 	}
 }
 
+var _ g.Memory[RuntimeTestState] = (*testMemory_SetPersistentState)(nil)
+
+type testMemory_SetPersistentState struct {
+}
+
+func (m *testMemory_SetPersistentState) PersistFn() g.PersistFn[RuntimeTestState] {
+	return func(ctx context.Context, threadID string, state RuntimeTestState) error {
+		return nil
+	}
+}
+
+func (m *testMemory_SetPersistentState) RestoreFn() g.RestoreFn[RuntimeTestState] {
+	return func(ctx context.Context, threadID string) (RuntimeTestState, error) {
+		return RuntimeTestState{Value: "restored"}, nil
+	}
+}
+
 // TestRuntime_SetPersistentState tests setting persistence functions
 func TestRuntime_SetPersistentState(t *testing.T) {
 	stateMonitorCh := make(chan g.StateMonitorEntry[RuntimeTestState], 10)
@@ -432,15 +449,7 @@ func TestRuntime_SetPersistentState(t *testing.T) {
 	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
 	defer runtime.Shutdown()
 
-	persistFn := func(ctx context.Context, threadID string, state RuntimeTestState) error {
-		return nil
-	}
-
-	restoreFn := func(ctx context.Context, threadID string) (RuntimeTestState, error) {
-		return RuntimeTestState{Value: "restored"}, nil
-	}
-
-	runtime.SetPersistentState(persistFn, restoreFn)
+	runtime.SetMemory(&testMemory_SetPersistentState{})
 
 	threadID := uuid.NewString()
 
@@ -473,23 +482,31 @@ func TestRuntime_Restore_WithoutPersistentState(t *testing.T) {
 	}
 }
 
+var _ g.Memory[RuntimeTestState] = (*testMemory_Persistence_StateIsPersisted)(nil)
+
+type testMemory_Persistence_StateIsPersisted struct {
+	persistedStates []RuntimeTestState
+	mu              sync.Mutex
+}
+
+func (m *testMemory_Persistence_StateIsPersisted) PersistFn() g.PersistFn[RuntimeTestState] {
+	return func(ctx context.Context, threadID string, state RuntimeTestState) error {
+		m.mu.Lock()
+		m.persistedStates = append(m.persistedStates, state)
+		m.mu.Unlock()
+		return nil
+	}
+}
+
+func (m *testMemory_Persistence_StateIsPersisted) RestoreFn() g.RestoreFn[RuntimeTestState] {
+	return func(ctx context.Context, threadID string) (RuntimeTestState, error) {
+		return RuntimeTestState{}, nil
+	}
+}
+
 // TestRuntime_Persistence_StateIsPersisted tests that state changes are persisted
 func TestRuntime_Persistence_StateIsPersisted(t *testing.T) {
 	stateMonitorCh := make(chan g.StateMonitorEntry[RuntimeTestState], 10)
-
-	var persistedStates []RuntimeTestState
-	var mu sync.Mutex
-
-	persistFn := func(ctx context.Context, threadID string, state RuntimeTestState) error {
-		mu.Lock()
-		persistedStates = append(persistedStates, state)
-		mu.Unlock()
-		return nil
-	}
-
-	restoreFn := func(ctx context.Context, threadID string) (RuntimeTestState, error) {
-		return RuntimeTestState{}, nil
-	}
 
 	policy, _ := RouterPolicyImplFactory(AnyRoute[RuntimeTestState])
 
@@ -506,7 +523,11 @@ func TestRuntime_Persistence_StateIsPersisted(t *testing.T) {
 	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{Counter: 0})
 	defer runtime.Shutdown()
 
-	runtime.SetPersistentState(persistFn, restoreFn)
+	memory := &testMemory_Persistence_StateIsPersisted{
+		persistedStates: make([]RuntimeTestState, 0),
+		mu:              sync.Mutex{},
+	}
+	runtime.SetMemory(memory)
 	runtime.AddEdge(endEdge)
 
 	runtime.Invoke(RuntimeTestState{})
@@ -528,9 +549,9 @@ done:
 	// Give persistence worker time to process
 	time.Sleep(100 * time.Millisecond)
 
-	mu.Lock()
-	count := len(persistedStates)
-	mu.Unlock()
+	memory.mu.Lock()
+	count := len(memory.persistedStates)
+	memory.mu.Unlock()
 
 	if count == 0 {
 		t.Error("Expected at least one persisted state, got 0")

@@ -100,10 +100,7 @@ func main() {
 	}
 
 	memory := b.NewMemMemory[gameState]()
-	graph.SetPersistentState(
-		memory.PersistFn(),
-		memory.RestoreFn(),
-	)
+	graph.SetMemory(memory)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	monitor := func() {
