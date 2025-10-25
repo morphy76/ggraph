@@ -68,7 +68,7 @@ func main() {
 		log.Fatalf("Graph validation failed: %v", err)
 	}
 
-	invocationConfig := g.ConfigInvokeThreadID(uuid.NewString())
+	invocationConfig := g.InvokeConfigThreadID(uuid.NewString())
 
 	myGraph.Invoke(myState{op: "+", num2: 5}, invocationConfig)
 	for {

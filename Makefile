@@ -45,7 +45,7 @@ clean-test: ## Clean test artifacts (coverage files, etc.)
 	@echo "✅ Test artifacts cleaned"
 
 ##@ Graph Examples
-.PHONY: run-conditional-ex run-thread-ex run-helloworld-ex run-loop-ex run-persistence-ex
+.PHONY: run-conditional-ex run-thread-ex run-helloworld-ex run-loop-ex run-persistence-ex run-all-ex
 run-conditional-ex: ## Run the conditional graph example
 	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/conditional/run.go
 run-thread-ex: ## Run the threading graph example
@@ -54,5 +54,9 @@ run-helloworld-ex: ## Run the hello world graph example
 	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/hello_world/run.go
 run-loop-ex: ## Run the loop graph example
 	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/loop/run.go
+run-interrupt-ex: ## Run the interrupt graph example
+	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/interrupt/run.go
 run-persistence-ex: ## Run the persistence graph example
 	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/loop_persistent/run.go
+run-all-ex: run-conditional-ex run-thread-ex run-helloworld-ex run-loop-ex run-interrupt-ex run-persistence-ex ## Run all graph examples
+	@echo "✅ All examples executed"

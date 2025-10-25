@@ -370,11 +370,11 @@ func TestRuntime_Invoke_ConcurrentInvocations(t *testing.T) {
 	threadID := "test-thread-1"
 
 	// First invocation
-	runtime.Invoke(RuntimeTestState{Value: "first"}, g.ConfigInvokeThreadID(threadID))
+	runtime.Invoke(RuntimeTestState{Value: "first"}, g.InvokeConfigThreadID(threadID))
 
 	// Try concurrent invocation on same thread (should fail)
 	time.Sleep(10 * time.Millisecond) // Give first invocation time to start
-	runtime.Invoke(RuntimeTestState{Value: "second"}, g.ConfigInvokeThreadID(threadID))
+	runtime.Invoke(RuntimeTestState{Value: "second"}, g.InvokeConfigThreadID(threadID))
 
 	// Collect entries
 	errorCount := 0

@@ -2,14 +2,10 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
-	"os"
-	"path/filepath"
 
-	"github.com/google/uuid"
 	b "github.com/morphy76/ggraph/pkg/builders"
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
@@ -26,67 +22,14 @@ type gameState struct {
 	High    int
 }
 
-type filePersistence struct {
-	baseDir string
-}
-
-func newFilePersistence(baseDir string) *filePersistence {
-	if err := os.MkdirAll(baseDir, 0755); err != nil {
-		log.Printf("Failed to create base directory: %v", err)
-	}
-	return &filePersistence{
-		baseDir: baseDir,
-	}
-}
-
-func (fp *filePersistence) getFilePath(threadID string) string {
-	return filepath.Join(fp.baseDir, fmt.Sprintf("game_state_%s.json", threadID))
-}
-
-func (fp *filePersistence) Persist(ctx context.Context, threadID string, state gameState) error {
-	filePath := fp.getFilePath(threadID)
-
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal state: %w", err)
-	}
-
-	err = os.WriteFile(filePath, data, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write state file: %w", err)
-	}
-
-	fmt.Printf("💾 State persisted to %s\n", filePath)
-	return nil
-}
-
-func (fp *filePersistence) Restore(ctx context.Context, threadID string) (gameState, error) {
-	filePath := fp.getFilePath(threadID)
-
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return gameState{}, fmt.Errorf("no saved state found: %w", err)
-		}
-		return gameState{}, fmt.Errorf("failed to read state file: %w", err)
-	}
-
-	var state gameState
-	err = json.Unmarshal(data, &state)
-	if err != nil {
-		return gameState{}, fmt.Errorf("failed to unmarshal state: %w", err)
-	}
-
-	fmt.Printf("📂 State restored from %s\n", filePath)
-	return state, nil
-}
-
 func main() {
-	stateDir := "game_states"
-	persistence := newFilePersistence(stateDir)
-
-	// Node 1: Determine target number
+	// Node 1: Determine target number (only if not already set from restored state)
 	initNode, _ := b.NewNodeBuilder("InitNode", func(userInput gameState, currentState gameState, notifyPartial g.NotifyPartialFn[gameState]) (gameState, error) {
+		// If target is already set (from restored state), don't reinitialize
+		if currentState.Target != 0 {
+			fmt.Printf("🔄 Resuming game with existing target\n")
+			return currentState, nil
+		}
 		currentState.Target = rand.Intn(100) + 1
 		currentState.Tries = 0
 		currentState.Low = 1
@@ -140,11 +83,11 @@ func main() {
 
 	// Build graph
 	startEdge := b.CreateStartEdge(initNode)
-	stateMonitorCh := make(chan g.StateMonitorEntry[gameState], 10)
-	runtime, _ := b.CreateRuntime(startEdge, stateMonitorCh)
-	defer runtime.Shutdown()
+	stateMonitorCh := make(chan g.StateMonitorEntry[gameState], 100)
+	graph, _ := b.CreateRuntime(startEdge, stateMonitorCh)
+	defer graph.Shutdown()
 
-	runtime.AddEdge(
+	graph.AddEdge(
 		b.CreateEdge(initNode, guessNode),
 		b.CreateEdge(guessNode, router),
 		b.CreateEdge(router, hintNode, map[string]string{"path": "fail"}),
@@ -152,31 +95,59 @@ func main() {
 		b.CreateEndEdge(router, map[string]string{"path": "success"}),
 	)
 
-	if err := runtime.Validate(); err != nil {
+	if err := graph.Validate(); err != nil {
 		log.Fatalf("Validation failed: %v", err)
 	}
 
-	// Configure persistence with runtime ID
-	invokeConfig := g.InvokeConfigThreadID(uuid.NewString())
-	runtime.SetPersistentState(
-		persistence.Persist,
-		persistence.Restore,
+	memory := b.NewMemMemory[gameState]()
+	graph.SetPersistentState(
+		memory.PersistFn(),
+		memory.RestoreFn(),
 	)
 
-	// The runtime will automatically try to restore state on first invoke
-	// If no state exists, it will start with initial state
-	fmt.Println("\n=== Starting game (will auto-restore if previous state exists) ===")
+	ctx, cancel := context.WithCancel(context.Background())
+	monitor := func() {
+		for entry := range stateMonitorCh {
+			fmt.Printf("📊 Monitor: Node=%s, Running=%v, Error=%v, State=%+v\n", entry.Node, entry.Running, entry.Error, entry.NewState)
+			if !entry.Running {
+				if entry.Error != nil {
+					fmt.Printf("❌ Error: %v\n", entry.Error)
+				} else {
+					fmt.Printf("✅ Success! Target was %d, found in %d tries\n", entry.NewState.Target, entry.NewState.Tries)
+				}
+				break
+			} else if entry.Node == "HintNode" {
+				cancel()
+				fmt.Printf("🛑 Cancellation requested!\n")
+				break
+			}
+		}
+	}
 
-	runtime.Invoke(gameState{}, invokeConfig)
+	go monitor()
+
+	threadID := graph.Invoke(
+		gameState{},
+		g.InvokeConfigContext(ctx),
+	)
+
+	fmt.Printf("🚀 Game stopped! Memory state: %+v\n", memory)
+	<-ctx.Done()
+
+	// Create a new context for resuming execution
+	graph.Invoke(
+		gameState{},
+		g.InvokeConfigThreadID(threadID),
+		g.InvokeConfigContext(context.Background()),
+	)
 
 	for entry := range stateMonitorCh {
+		fmt.Printf("📊 Monitor: Node=%s, Running=%v, Error=%v, State=%+v\n", entry.Node, entry.Running, entry.Error, entry.NewState)
 		if !entry.Running {
-			if entry.Error == nil {
-				fmt.Printf("✅ Success! Target was %d, found in %d tries\n", entry.NewState.Target, entry.NewState.Tries)
-				fmt.Printf("\n💡 Try running this example again to see persistence in action!\n")
-				fmt.Printf("   The state is saved asynchronously in: %s/\n", stateDir)
-			} else {
+			if entry.Error != nil {
 				fmt.Printf("❌ Error: %v\n", entry.Error)
+			} else {
+				fmt.Printf("✅ Success! Target was %d, found in %d tries\n", entry.NewState.Target, entry.NewState.Tries)
 			}
 			break
 		}

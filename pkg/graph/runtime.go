@@ -147,7 +147,7 @@ func DefaultInvokeConfig() InvokeConfig {
 	}
 }
 
-// ConfigInvokeThreadID creates an InvokeConfig with the specified ThreadID.
+// InvokeConfigThreadID creates an InvokeConfig with the specified ThreadID.
 //
 // This helper function simplifies the creation of an InvokeConfig when only
 // the ThreadID needs to be set.
@@ -159,13 +159,13 @@ func DefaultInvokeConfig() InvokeConfig {
 //
 // Example:
 //
-//	threadConfig := ConfigInvokeThreadID("custom-thread-1")
+//	threadConfig := InvokeConfigThreadID("custom-thread-1")
 //	runtime.Invoke(userInput, threadConfig)
-func ConfigInvokeThreadID(threadID string) InvokeConfig {
+func InvokeConfigThreadID(threadID string) InvokeConfig {
 	return InvokeConfig{ThreadID: threadID}
 }
 
-// ConfigInvokeContext creates an InvokeConfig with the specified Context.
+// InvokeConfigContext creates an InvokeConfig with the specified Context.
 //
 // This helper function simplifies the creation of an InvokeConfig when only
 // the Context needs to be set.
@@ -179,9 +179,9 @@ func ConfigInvokeThreadID(threadID string) InvokeConfig {
 // Example:
 //
 //	ctx := context.WithValue(context.Background(), "key", "value")
-//	contextConfig := ConfigInvokeContext(ctx)
+//	contextConfig := InvokeConfigContext(ctx)
 //	runtime.Invoke(userInput, contextConfig)
-func ConfigInvokeContext(ctx context.Context) InvokeConfig {
+func InvokeConfigContext(ctx context.Context) InvokeConfig {
 	return InvokeConfig{Context: ctx}
 }
 

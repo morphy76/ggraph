@@ -260,13 +260,19 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 			if result.err != nil {
 				r.sendMonitorEntry(monitorError[T](result.node.Name(), useThreadID, result.err))
 				useExecuting.Store(false)
+				r.clearThread(useThreadID)
 				continue
 			}
 
 			select {
 			case <-useInvocationContext.Done():
+				err := r.persistState(useThreadID)
+				if err != nil {
+					r.sendMonitorEntry(monitorNonFatalError[T](result.node.Name(), useThreadID, fmt.Errorf("state persistence error: %w", err)))
+				}
 				r.sendMonitorEntry(monitorError[T](result.node.Name(), useThreadID, fmt.Errorf("invocation context done: %w", useInvocationContext.Err())))
 				useExecuting.Store(false)
+				r.clearThread(useThreadID)
 				continue
 			default:
 				if result.partial {
@@ -283,7 +289,12 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 				if result.node.Role() == g.EndNode {
 					if r.stateMonitorCh != nil {
 						r.sendMonitorEntry(monitorCompleted(result.node.Name(), useThreadID, newState))
-						useExecuting.Store(false)
+					}
+					useExecuting.Store(false)
+					// Don't clear thread state immediately if there's no persistence
+					// This allows CurrentState() to return the final state
+					if r.persistFn != nil {
+						r.clearThread(useThreadID)
 					}
 					continue
 				} else {
@@ -296,6 +307,7 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 				if len(outboundEdges) == 0 {
 					r.sendMonitorEntry(monitorError[T](result.node.Name(), useThreadID, fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNoOutboundEdges)))
 					useExecuting.Store(false)
+					r.clearThread(useThreadID)
 					continue
 				}
 
@@ -303,6 +315,7 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 				if policy == nil {
 					r.sendMonitorEntry(monitorError[T](result.node.Name(), useThreadID, fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNoRoutingPolicy)))
 					useExecuting.Store(false)
+					r.clearThread(useThreadID)
 					continue
 				}
 
@@ -310,6 +323,7 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 				if nextEdge == nil {
 					r.sendMonitorEntry(monitorError[T](result.node.Name(), useThreadID, fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNilEdge)))
 					useExecuting.Store(false)
+					r.clearThread(useThreadID)
 					continue
 				}
 
@@ -317,6 +331,7 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 				if nextNode == nil {
 					r.sendMonitorEntry(monitorError[T](result.node.Name(), useThreadID, fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNextEdgeNil)))
 					useExecuting.Store(false)
+					r.clearThread(useThreadID)
 					continue
 				}
 
@@ -416,11 +431,6 @@ func (r *runtimeImpl[T]) persistenceWorker() {
 		case state := <-r.pendingPersist:
 			if err := r.persistFn(r.ctx, state.threadID, state.state); err != nil {
 				r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", state.threadID, fmt.Errorf("state persistence error: %w", err)))
-			} else {
-				useLock := r.lockByThreadID(state.threadID)
-				useLock.Lock()
-				r.state[state.threadID] = state.state
-				useLock.Unlock()
 			}
 		}
 	}
@@ -444,20 +454,12 @@ func (r *runtimeImpl[T]) threadEvictor() {
 			now := time.Now()
 			for threadID, expiry := range r.threadTTL {
 				if now.After(expiry) {
-					delete(r.threadTTL, threadID)
-					useLock := r.lockByThreadID(threadID)
-					useLock.Lock()
-					delete(r.state, threadID)
-					useLock.Unlock()
-
 					err := r.persistState(threadID)
 					if err != nil {
 						r.sendMonitorEntry(monitorNonFatalError[T]("ThreadEvictor", threadID, fmt.Errorf("state persistence error during eviction: %w", err)))
 					}
 
-					delete(r.executing, threadID)
-					delete(r.lastPersisted, threadID)
-					delete(r.stateChangeLock, threadID)
+					r.clearThread(threadID)
 
 					r.sendMonitorEntry(monitorNonFatalError[T]("ThreadEvictor", threadID, fmt.Errorf("evicted thread %s: %w", threadID, g.ErrEvictionByInactivity)))
 				}
@@ -504,4 +506,16 @@ func (r *runtimeImpl[T]) lockByThreadID(threadID string) *sync.Mutex {
 func (r *runtimeImpl[T]) threadExistsWithinTTL(threadID string) bool {
 	ttl, exists := r.threadTTL[threadID]
 	return exists && time.Now().Before(ttl)
+}
+
+func (r *runtimeImpl[T]) clearThread(threadID string) {
+	delete(r.threadTTL, threadID)
+	useLock := r.lockByThreadID(threadID)
+	useLock.Lock()
+	delete(r.state, threadID)
+	useLock.Unlock()
+
+	delete(r.executing, threadID)
+	delete(r.lastPersisted, threadID)
+	delete(r.stateChangeLock, threadID)
 }
