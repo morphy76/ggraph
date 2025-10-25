@@ -5,6 +5,7 @@ import (
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
 
+// TODO options to limit the memory size and eviction policies
 // NewMemMemory creates a new in-memory Memory implementation.
 //
 // Returns:
