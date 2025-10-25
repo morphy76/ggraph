@@ -2,8 +2,6 @@ package graph
 
 import (
 	"context"
-
-	"github.com/google/uuid"
 )
 
 // NotifyPartialFn is a callback function for sending partial state updates during node execution.
@@ -78,7 +76,7 @@ type NodeFn[T SharedState] func(userInput, currentState T, notify NotifyPartialF
 //	}
 type EdgeSelectionFn[T SharedState] func(userInput, currentState T, edges []Edge[T]) Edge[T]
 
-// PersistFn is a function that saves the current state to persistent storage.
+// PersistFn is a function that saves the current state of a thread to persistent storage.
 //
 // This function is called by the runtime to persist state to external storage
 // (database, file system, etc.), enabling stateful workflows that can be resumed
@@ -86,7 +84,7 @@ type EdgeSelectionFn[T SharedState] func(userInput, currentState T, edges []Edge
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeout control.
-//   - runtimeID: Unique identifier for this runtime instance.
+//   - threadID: Unique identifier for this thread instance.
 //   - state: The current state to persist.
 //
 // Returns:
@@ -94,14 +92,14 @@ type EdgeSelectionFn[T SharedState] func(userInput, currentState T, edges []Edge
 //
 // Example:
 //
-//	func persistState(ctx context.Context, runtimeID uuid.UUID, state MyState) error {
+//	func persistState(ctx context.Context, threadID string, state MyState) error {
 //	    data, err := json.Marshal(state)
 //	    if err != nil {
 //	        return err
 //	    }
-//	    return db.Save(ctx, runtimeID.String(), data)
+//	    return db.Save(ctx, threadID, data)
 //	}
-type PersistFn[T SharedState] func(ctx context.Context, runtimeID uuid.UUID, state T) error
+type PersistFn[T SharedState] func(ctx context.Context, threadID string, state T) error
 
 // RestoreFn is a function that retrieves previously persisted state from storage.
 //
@@ -128,7 +126,7 @@ type PersistFn[T SharedState] func(ctx context.Context, runtimeID uuid.UUID, sta
 //	    err = json.Unmarshal(data, &state)
 //	    return state, err
 //	}
-type RestoreFn[T SharedState] func(ctx context.Context, runtimeID uuid.UUID) (T, error)
+type RestoreFn[T SharedState] func(ctx context.Context, threadID string) (T, error)
 
 // ReducerFn is a function that combines multiple states into a single state.
 //
@@ -167,15 +165,28 @@ type StateObserver[T SharedState] interface {
 	//
 	// Parameters:
 	//   - node: The node that produced the state change.
+	//   - config: The configuration settings for the invocation.
 	//   - userInput: The original user input to the graph.
 	//   - stateChange: The new state after the node's execution.
 	//   - reducer: The reducer function used to combine states.
 	//   - err: Any error that occurred during node execution.
 	//   - partial: true if this is a partial update, false if final.
-	NotifyStateChange(node Node[T], userInput, stateChange T, reducer ReducerFn[T], err error, partial bool)
+	NotifyStateChange(node Node[T], config InvokeConfig, userInput, stateChange T, reducer ReducerFn[T], err error, partial bool)
 
-	// CurrentState returns the current state of the graph execution.
-	CurrentState() T
+	// CurrentState returns the current state for the given thread ID.
+	//
+	// Parameters:
+	//   - threadID: Unique identifier for the thread instance.
+	//
+	// Returns:
+	//   - The current state associated with the specified thread ID.
+	CurrentState(threadID string) T
+
+	// InitialState returns the initial state used at the start of execution.
+	//
+	// Returns:
+	//   - The initial state provided to the runtime.
+	InitialState() T
 }
 
 // Persistent is an interface for managing state persistence in graph workflows.
@@ -187,22 +198,18 @@ type Persistent[T SharedState] interface {
 	// SetPersistentState configures the persistence mechanism for the runtime.
 	//
 	// This method must be called before invoking the graph if persistence is desired.
-	// It sets up the functions that will be used to save and restore state, along
-	// with a unique runtime ID that identifies this execution session.
+	// It sets up the functions that will be used to save and restore state.
 	//
 	// Parameters:
 	//   - persist: Function to save state to storage.
 	//   - restore: Function to load state from storage.
-	//   - runtimeID: Unique identifier for this runtime instance.
 	//
 	// Example:
 	//
-	//	runtimeID := uuid.New()
-	//	runtime.SetPersistentState(persistState, restoreState, runtimeID)
+	//	runtime.SetPersistentState(persistState, restoreState)
 	SetPersistentState(
 		persist PersistFn[T],
 		restore RestoreFn[T],
-		runtimeID uuid.UUID,
 	)
 
 	// Restore loads and applies previously persisted state to the runtime.
@@ -210,6 +217,9 @@ type Persistent[T SharedState] interface {
 	// This method should be called before Invoke() to restore the state from
 	// a previous execution session. It uses the RestoreFn provided in
 	// SetPersistentState to retrieve the state from storage.
+	//
+	// Parameters:
+	//   - threadID: Unique identifier for the thread instance to restore.
 	//
 	// Returns:
 	//   - An error if the restoration fails.
@@ -220,5 +230,5 @@ type Persistent[T SharedState] interface {
 	//	    log.Printf("Failed to restore state: %v", err)
 	//	}
 	//	runtime.Invoke(userInput)
-	Restore() error
+	Restore(threadID string) error
 }

@@ -8,9 +8,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/google/uuid"
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
+
+type pendingPersistEntry[T g.SharedState] struct {
+	threadID string
+	state    T
+}
 
 // RuntimeFactory creates a new instance of Runtime with the specified SharedState type, state merger function, and initial state.
 func RuntimeFactory[T g.SharedState](
@@ -26,20 +30,27 @@ func RuntimeFactory[T g.SharedState](
 		ctx:    ctx,
 		cancel: cancelFn,
 
-		outcomeCh:      make(chan nodeFnReturnStruct[T]),
+		outcomeCh:      make(chan nodeFnReturnStruct[T], 10),
 		stateMonitorCh: stateMonitorCh,
 
 		startEdge: startEdge,
 		edges:     []g.Edge[T]{},
 
-		state:           initialState,
-		stateChangeLock: &sync.Mutex{},
+		initialState:    initialState,
+		state:           make(map[string]T),
+		stateChangeLock: make(map[string]*sync.Mutex),
 
-		pendingPersist: make(chan T, 10),
+		executing: make(map[string]*atomic.Bool),
+
+		lastPersisted: make(map[string]T),
+
+		pendingPersist: make(chan pendingPersistEntry[T], 10),
+
+		threadTTL: make(map[string]time.Time),
 	}
-	rv.executing.Store(false)
 	rv.start()
 	rv.startPersistenceWorker()
+	rv.startThreadEvictor()
 	return rv, nil
 }
 
@@ -57,6 +68,7 @@ type nodeFnReturnStruct[T g.SharedState] struct {
 	err         error
 	partial     bool
 	reducer     g.ReducerFn[T]
+	config      g.InvokeConfig
 }
 
 type runtimeImpl[T g.SharedState] struct {
@@ -69,27 +81,43 @@ type runtimeImpl[T g.SharedState] struct {
 	startEdge g.Edge[T]
 	edges     []g.Edge[T]
 
-	state           T
-	stateChangeLock *sync.Mutex
+	initialState    T
+	state           map[string]T
+	stateChangeLock map[string]*sync.Mutex
 
-	executing atomic.Bool
+	executing map[string]*atomic.Bool
 
-	identity       uuid.UUID
-	persistFn      g.PersistFn[T]
-	restoreFn      g.RestoreFn[T]
-	lastPersisted  T
-	persistLock    sync.RWMutex
-	pendingPersist chan T
-	persistWg      sync.WaitGroup
+	persistFn     g.PersistFn[T]
+	restoreFn     g.RestoreFn[T]
+	lastPersisted map[string]T
+
+	pendingPersist chan pendingPersistEntry[T]
+
+	threadTTL map[string]time.Time
+
+	backgroundWorkers sync.WaitGroup
 }
 
-func (r *runtimeImpl[T]) Invoke(userInput T) {
-	if !r.executing.CompareAndSwap(false, true) {
-		r.sendMonitorEntry(monitorError[T]("Runtime", fmt.Errorf("cannot invoke graph: %w", g.ErrRuntimeExecuting)))
-		return
+func (r *runtimeImpl[T]) Invoke(userInput T, configs ...g.InvokeConfig) string {
+	requestedConfig := g.MergeInvokeConfig(configs...)
+	useConfig := g.MergeInvokeConfig(g.DefaultInvokeConfig(), requestedConfig)
+
+	if !r.threadExistsWithinTTL(useConfig.ThreadID) {
+		if err := r.Restore(useConfig.ThreadID); err != nil {
+			r.sendMonitorEntry(monitorError[T]("Runtime", fmt.Errorf("failed to restore thread %s: %w", useConfig.ThreadID, err)))
+			return useConfig.ThreadID
+		}
 	}
 
-	r.startEdge.From().Accept(userInput, r)
+	r.threadTTL[useConfig.ThreadID] = time.Now().Add(1 * time.Hour)
+
+	if !r.executingByThreadID(useConfig).CompareAndSwap(false, true) {
+		r.sendMonitorEntry(monitorError[T]("Runtime", fmt.Errorf("cannot invoke graph: %w", g.ErrRuntimeExecuting)))
+		return useConfig.ThreadID
+	}
+
+	r.startEdge.From().Accept(userInput, r, useConfig)
+	return useConfig.ThreadID
 }
 
 func (r *runtimeImpl[T]) AddEdge(edge ...g.Edge[T]) {
@@ -120,7 +148,7 @@ func (r *runtimeImpl[T]) Shutdown() {
 
 	done := make(chan struct{})
 	go func() {
-		r.persistWg.Wait()
+		r.backgroundWorkers.Wait()
 		close(done)
 	}()
 
@@ -132,69 +160,73 @@ func (r *runtimeImpl[T]) Shutdown() {
 
 func (r *runtimeImpl[T]) NotifyStateChange(
 	node g.Node[T],
+	config g.InvokeConfig,
 	userInput T,
 	stateChange T,
 	reducer g.ReducerFn[T],
 	err error,
 	partial bool,
 ) {
-	r.outcomeCh <- nodeFnReturnStruct[T]{node: node, userInput: userInput, stateChange: stateChange, err: err, partial: partial, reducer: reducer}
+	r.outcomeCh <- nodeFnReturnStruct[T]{node: node, userInput: userInput, stateChange: stateChange, err: err, partial: partial, reducer: reducer, config: config}
+}
+
+func (r *runtimeImpl[T]) CurrentState(threadID string) T {
+	useLock := r.lockByThreadID(threadID)
+	useLock.Lock()
+	defer useLock.Unlock()
+
+	useState := r.initialState
+	if state, exists := r.state[threadID]; exists {
+		useState = state
+	}
+	return useState
+}
+
+func (r *runtimeImpl[T]) InitialState() T {
+	return r.initialState
 }
 
 func (r *runtimeImpl[T]) StartEdge() g.Edge[T] {
 	return r.startEdge
 }
 
-func (r *runtimeImpl[T]) CurrentState() T {
-	r.stateChangeLock.Lock()
-	defer r.stateChangeLock.Unlock()
-	return r.state
-}
-
 func (r *runtimeImpl[T]) SetPersistentState(
 	persist g.PersistFn[T],
 	restore g.RestoreFn[T],
-	runtimeID uuid.UUID,
 ) {
 	r.persistFn = persist
 	r.restoreFn = restore
-	r.identity = runtimeID
 }
 
-func (r *runtimeImpl[T]) Restore() error {
+func (r *runtimeImpl[T]) Restore(threadID string) error {
 	if r.restoreFn == nil {
-		return fmt.Errorf("cannot restore the graph: %w", g.ErrRestoreNotSet)
+		return nil
 	}
-	if r.identity == uuid.Nil {
-		return fmt.Errorf("cannot restore the graph: %w", g.ErrRuntimeIDNotSet)
-	}
-	restoredState, err := r.restoreFn(r.ctx, r.identity)
+	restoredState, err := r.restoreFn(r.ctx, threadID)
 	if err != nil {
 		return fmt.Errorf("state restoration failed: %w", err)
 	}
-	r.stateChangeLock.Lock()
-	r.state = restoredState
-	r.stateChangeLock.Unlock()
-	r.persistLock.Lock()
-	r.lastPersisted = restoredState
-	r.persistLock.Unlock()
+
+	useLock := r.lockByThreadID(threadID)
+	useLock.Lock()
+	r.state[threadID] = restoredState
+	r.lastPersisted[threadID] = restoredState
+	useLock.Unlock()
+
 	return nil
 }
 
-func (r *runtimeImpl[T]) persistState() error {
+func (r *runtimeImpl[T]) persistState(threadID string) error {
 	if r.persistFn == nil {
 		return nil
 	}
-	if r.identity == uuid.Nil {
-		return fmt.Errorf("cannot persist state: %w", g.ErrRuntimeIDNotSet)
-	}
-	r.stateChangeLock.Lock()
-	currentState := r.state
-	r.stateChangeLock.Unlock()
 
-	r.persistLock.RLock()
-	lastPersisted := r.lastPersisted
-	r.persistLock.RUnlock()
+	useLock := r.lockByThreadID(threadID)
+	useLock.Lock()
+	defer useLock.Unlock()
+
+	currentState := r.state[threadID]
+	lastPersisted := r.lastPersisted[threadID]
 
 	if r.statesEqual(currentState, lastPersisted) {
 		return nil
@@ -204,7 +236,7 @@ func (r *runtimeImpl[T]) persistState() error {
 	defer cancel()
 
 	select {
-	case r.pendingPersist <- currentState:
+	case r.pendingPersist <- pendingPersistEntry[T]{threadID: threadID, state: currentState}:
 	case <-ctx.Done():
 		r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", fmt.Errorf("persistence timed out: %w", ctx.Err())))
 	default:
@@ -222,12 +254,14 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 	for {
 		select {
 		case <-r.ctx.Done():
-			r.executing.Store(false)
 			return
 		case result := <-r.outcomeCh:
+			useThreadID := result.config.ThreadID
+			useExecuting := r.executingByThreadID(result.config)
+
 			if result.err != nil {
 				r.sendMonitorEntry(monitorError[T](result.node.Name(), result.err))
-				r.executing.Store(false)
+				useExecuting.Store(false)
 				continue
 			}
 
@@ -236,8 +270,8 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 				continue
 			}
 
-			newState := r.replace(result.stateChange, result.reducer)
-			err := r.persistState()
+			newState := r.replace(useThreadID, result.stateChange, result.reducer)
+			err := r.persistState(useThreadID)
 			if err != nil {
 				r.sendMonitorEntry(monitorNonFatalError[T](result.node.Name(), fmt.Errorf("state persistence error: %w", err)))
 			}
@@ -245,7 +279,7 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 			if result.node.Role() == g.EndNode {
 				if r.stateMonitorCh != nil {
 					r.sendMonitorEntry(monitorCompleted(result.node.Name(), newState))
-					r.executing.Store(false)
+					useExecuting.Store(false)
 				}
 				continue
 			} else {
@@ -257,32 +291,32 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 			outboundEdges := r.edgesFrom(result.node)
 			if len(outboundEdges) == 0 {
 				r.sendMonitorEntry(monitorError[T](result.node.Name(), fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNoOutboundEdges)))
-				r.executing.Store(false)
+				useExecuting.Store(false)
 				continue
 			}
 
 			policy := result.node.RoutePolicy()
 			if policy == nil {
 				r.sendMonitorEntry(monitorError[T](result.node.Name(), fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNoRoutingPolicy)))
-				r.executing.Store(false)
+				useExecuting.Store(false)
 				continue
 			}
 
-			nextEdge := policy.SelectEdge(result.userInput, r.state, outboundEdges)
+			nextEdge := policy.SelectEdge(result.userInput, r.state[useThreadID], outboundEdges)
 			if nextEdge == nil {
 				r.sendMonitorEntry(monitorError[T](result.node.Name(), fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNilEdge)))
-				r.executing.Store(false)
+				useExecuting.Store(false)
 				continue
 			}
 
 			nextNode := nextEdge.To()
 			if nextNode == nil {
 				r.sendMonitorEntry(monitorError[T](result.node.Name(), fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNextEdgeNil)))
-				r.executing.Store(false)
+				useExecuting.Store(false)
 				continue
 			}
 
-			nextNode.Accept(result.userInput, r)
+			nextNode.Accept(result.userInput, r, result.config)
 		}
 	}
 }
@@ -299,12 +333,19 @@ func (r *runtimeImpl[T]) sendMonitorEntry(entry g.StateMonitorEntry[T]) {
 	}
 }
 
-func (r *runtimeImpl[T]) replace(stateChange T, reducer g.ReducerFn[T]) T {
-	r.stateChangeLock.Lock()
-	defer r.stateChangeLock.Unlock()
+func (r *runtimeImpl[T]) replace(threadID string, stateChange T, reducer g.ReducerFn[T]) T {
+	useLock := r.lockByThreadID(threadID)
+	useLock.Lock()
+	defer useLock.Unlock()
 
-	r.state = reducer(r.state, stateChange)
-	return r.state
+	// Get current state without calling CurrentState() to avoid deadlock
+	useState := r.initialState
+	if state, exists := r.state[threadID]; exists {
+		useState = state
+	}
+
+	r.state[threadID] = reducer(useState, stateChange)
+	return r.state[threadID]
 }
 
 func (r *runtimeImpl[T]) edgesFrom(node g.Node[T]) []g.Edge[T] {
@@ -355,12 +396,12 @@ func (r *runtimeImpl[T]) hasPathToEndEdge(node g.Node[T], visited map[string]boo
 }
 
 func (r *runtimeImpl[T]) startPersistenceWorker() {
-	r.persistWg.Add(1)
+	r.backgroundWorkers.Add(1)
 	go r.persistenceWorker()
 }
 
 func (r *runtimeImpl[T]) persistenceWorker() {
-	defer r.persistWg.Done()
+	defer r.backgroundWorkers.Done()
 
 	for {
 		select {
@@ -368,12 +409,53 @@ func (r *runtimeImpl[T]) persistenceWorker() {
 			r.flushPendingStates()
 			return
 		case state := <-r.pendingPersist:
-			if err := r.persistFn(r.ctx, r.identity, state); err != nil {
+			if err := r.persistFn(r.ctx, state.threadID, state.state); err != nil {
 				r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", fmt.Errorf("state persistence error: %w", err)))
 			} else {
-				r.persistLock.Lock()
-				r.lastPersisted = state
-				r.persistLock.Unlock()
+				useLock := r.lockByThreadID(state.threadID)
+				useLock.Lock()
+				r.state[state.threadID] = state.state
+				useLock.Unlock()
+			}
+		}
+	}
+}
+
+func (r *runtimeImpl[T]) startThreadEvictor() {
+	r.backgroundWorkers.Add(1)
+	go r.threadEvictor()
+}
+
+func (r *runtimeImpl[T]) threadEvictor() {
+	defer r.backgroundWorkers.Done()
+
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-r.ctx.Done():
+			return
+		case <-ticker.C:
+			now := time.Now()
+			for threadID, expiry := range r.threadTTL {
+				if now.After(expiry) {
+					delete(r.threadTTL, threadID)
+					useLock := r.lockByThreadID(threadID)
+					useLock.Lock()
+					delete(r.state, threadID)
+					useLock.Unlock()
+
+					err := r.persistState(threadID)
+					if err != nil {
+						r.sendMonitorEntry(monitorNonFatalError[T]("ThreadEvictor", fmt.Errorf("state persistence error during eviction: %w", err)))
+					}
+
+					delete(r.executing, threadID)
+					delete(r.lastPersisted, threadID)
+					delete(r.stateChangeLock, threadID)
+
+					r.sendMonitorEntry(monitorNonFatalError[T]("ThreadEvictor", fmt.Errorf("evicted thread %s: %w", threadID, g.ErrEvictionByInactivity)))
+				}
 			}
 		}
 	}
@@ -383,7 +465,7 @@ func (r *runtimeImpl[T]) flushPendingStates() {
 	for {
 		select {
 		case state := <-r.pendingPersist:
-			if err := r.persistFn(r.ctx, r.identity, state); err != nil {
+			if err := r.persistFn(r.ctx, state.threadID, state.state); err != nil {
 				r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", fmt.Errorf("state persistence error during flush: %w", err)))
 			}
 		default:
@@ -394,4 +476,27 @@ func (r *runtimeImpl[T]) flushPendingStates() {
 
 func (r *runtimeImpl[T]) statesEqual(a, b T) bool {
 	return reflect.DeepEqual(a, b)
+}
+
+func (r *runtimeImpl[T]) executingByThreadID(config g.InvokeConfig) *atomic.Bool {
+	exec, exists := r.executing[config.ThreadID]
+	if !exists {
+		exec = &atomic.Bool{}
+		r.executing[config.ThreadID] = exec
+	}
+	return exec
+}
+
+func (r *runtimeImpl[T]) lockByThreadID(threadID string) *sync.Mutex {
+	lock, exists := r.stateChangeLock[threadID]
+	if !exists {
+		lock = &sync.Mutex{}
+		r.stateChangeLock[threadID] = lock
+	}
+	return lock
+}
+
+func (r *runtimeImpl[T]) threadExistsWithinTTL(threadID string) bool {
+	ttl, exists := r.threadTTL[threadID]
+	return exists && time.Now().Before(ttl)
 }

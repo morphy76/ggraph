@@ -39,12 +39,12 @@ func newFilePersistence(baseDir string) *filePersistence {
 	}
 }
 
-func (fp *filePersistence) getFilePath(runtimeID uuid.UUID) string {
-	return filepath.Join(fp.baseDir, fmt.Sprintf("game_state_%s.json", runtimeID.String()))
+func (fp *filePersistence) getFilePath(threadID string) string {
+	return filepath.Join(fp.baseDir, fmt.Sprintf("game_state_%s.json", threadID))
 }
 
-func (fp *filePersistence) Persist(ctx context.Context, runtimeID uuid.UUID, state gameState) error {
-	filePath := fp.getFilePath(runtimeID)
+func (fp *filePersistence) Persist(ctx context.Context, threadID string, state gameState) error {
+	filePath := fp.getFilePath(threadID)
 
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
@@ -60,8 +60,8 @@ func (fp *filePersistence) Persist(ctx context.Context, runtimeID uuid.UUID, sta
 	return nil
 }
 
-func (fp *filePersistence) Restore(ctx context.Context, runtimeID uuid.UUID) (gameState, error) {
-	filePath := fp.getFilePath(runtimeID)
+func (fp *filePersistence) Restore(ctx context.Context, threadID string) (gameState, error) {
+	filePath := fp.getFilePath(threadID)
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -157,23 +157,22 @@ func main() {
 	}
 
 	// Configure persistence with runtime ID
-	runtimeID := uuid.New()
+	invokeConfig := g.ConfigThreadID(uuid.NewString())
 	runtime.SetPersistentState(
 		persistence.Persist,
 		persistence.Restore,
-		runtimeID,
 	)
 
 	// Try to restore previous state
 	fmt.Println("\n=== Attempting to restore previous state ===")
-	if err := runtime.Restore(); err != nil {
+	if err := runtime.Restore(invokeConfig.ThreadID); err != nil {
 		fmt.Printf("⚠️  No previous state to restore: %v\n", err)
 		fmt.Println("Starting fresh game...")
 	} else {
 		fmt.Println("✅ Previous state restored! Continuing from where we left off...")
 	}
 
-	runtime.Invoke(gameState{})
+	runtime.Invoke(gameState{}, invokeConfig)
 
 	for entry := range stateMonitorCh {
 		if !entry.Running {

@@ -17,6 +17,8 @@ type NodeTestState struct {
 }
 
 // mockStateObserver is a minimal StateObserver implementation for testing
+var _ g.StateObserver[NodeTestState] = (*mockStateObserver)(nil)
+
 type mockStateObserver struct {
 	mu              sync.Mutex
 	currentState    NodeTestState
@@ -40,7 +42,7 @@ func newMockStateObserver(initialState NodeTestState) *mockStateObserver {
 	}
 }
 
-func (m *mockStateObserver) NotifyStateChange(node g.Node[NodeTestState], userInput, stateChange NodeTestState, reducer g.ReducerFn[NodeTestState], err error, partial bool) {
+func (m *mockStateObserver) NotifyStateChange(node g.Node[NodeTestState], config g.InvokeConfig, userInput, stateChange NodeTestState, reducer g.ReducerFn[NodeTestState], err error, partial bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -61,7 +63,13 @@ func (m *mockStateObserver) NotifyStateChange(node g.Node[NodeTestState], userIn
 	m.notificationsCh <- notification
 }
 
-func (m *mockStateObserver) CurrentState() NodeTestState {
+func (m *mockStateObserver) CurrentState(threadID string) NodeTestState {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.currentState
+}
+
+func (m *mockStateObserver) InitialState() NodeTestState {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.currentState
@@ -125,7 +133,7 @@ func TestNodeImplFactory_WithNilNodeFn(t *testing.T) {
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
 	userInput := NodeTestState{Value: "input", Counter: 5}
 
-	node.Accept(userInput, observer)
+	node.Accept(userInput, observer, g.DefaultInvokeConfig())
 
 	select {
 	case notification := <-observer.notificationsCh:
@@ -216,7 +224,7 @@ func TestNodeImplFactory_NodeExecution(t *testing.T) {
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
 	userInput := NodeTestState{Value: "input", Counter: 5}
 
-	node.Accept(userInput, observer)
+	node.Accept(userInput, observer, g.DefaultInvokeConfig())
 
 	select {
 	case notification := <-observer.notificationsCh:
@@ -259,7 +267,7 @@ func TestNodeImplFactory_NodeExecutionWithError(t *testing.T) {
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
 	userInput := NodeTestState{Value: "input", Counter: 5}
 
-	node.Accept(userInput, observer)
+	node.Accept(userInput, observer, g.DefaultInvokeConfig())
 
 	select {
 	case notification := <-observer.notificationsCh:
@@ -302,7 +310,7 @@ func TestNodeImplFactory_PartialStateUpdates(t *testing.T) {
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
 	userInput := NodeTestState{Value: "input", Counter: 0}
 
-	node.Accept(userInput, observer)
+	node.Accept(userInput, observer, g.DefaultInvokeConfig())
 
 	notifications := make([]stateNotification, 0)
 	timeout := time.After(2 * time.Second)
@@ -400,14 +408,15 @@ func TestNodeImplFactory_WithReducer(t *testing.T) {
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 10})
 	userInput := NodeTestState{Value: "input", Counter: 0}
 
-	node.Accept(userInput, observer)
+	defaultConfig := g.DefaultInvokeConfig()
+	node.Accept(userInput, observer, defaultConfig)
 
 	select {
 	case notification := <-observer.notificationsCh:
 		if notification.err != nil {
 			t.Errorf("Unexpected error: %v", notification.err)
 		}
-		finalState := observer.CurrentState()
+		finalState := observer.CurrentState(defaultConfig.ThreadID)
 		if finalState.Counter != 15 {
 			t.Errorf("Expected Counter=15 (10+5), got %d", finalState.Counter)
 		}
@@ -441,7 +450,7 @@ func TestNodeImplFactory_MultipleExecutions(t *testing.T) {
 		observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
 		userInput := NodeTestState{Value: "input", Counter: i}
 
-		node.Accept(userInput, observer)
+		node.Accept(userInput, observer, g.DefaultInvokeConfig())
 
 		select {
 		case notification := <-observer.notificationsCh:
@@ -502,14 +511,15 @@ func TestNodeImplFactory_NilReducer(t *testing.T) {
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 10})
 	userInput := NodeTestState{Value: "input", Counter: 0}
 
-	node.Accept(userInput, observer)
+	defaultConfig := g.DefaultInvokeConfig()
+	node.Accept(userInput, observer, defaultConfig)
 
 	select {
 	case notification := <-observer.notificationsCh:
 		if notification.err != nil {
 			t.Errorf("Unexpected error: %v", notification.err)
 		}
-		finalState := observer.CurrentState()
+		finalState := observer.CurrentState(defaultConfig.ThreadID)
 		if finalState.Counter != 99 {
 			t.Errorf("Expected Counter=99, got %d", finalState.Counter)
 		}

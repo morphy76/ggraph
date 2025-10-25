@@ -18,21 +18,24 @@ type mockNode struct {
 	role g.NodeRole
 }
 
-func (m *mockNode) Accept(userInput TestState, runtime g.StateObserver[TestState]) {}
-func (m *mockNode) Name() string                                                   { return m.name }
-func (m *mockNode) RoutePolicy() g.RoutePolicy[TestState]                          { return nil }
-func (m *mockNode) Role() g.NodeRole                                               { return m.role }
+func (m *mockNode) Accept(userInput TestState, runtime g.StateObserver[TestState], config g.InvokeConfig) {
+}
+func (m *mockNode) Name() string                          { return m.name }
+func (m *mockNode) RoutePolicy() g.RoutePolicy[TestState] { return nil }
+func (m *mockNode) Role() g.NodeRole                      { return m.role }
 
 // mockNodeGeneric is a generic mock node for testing with different state types
+var _ g.Node[g.SharedState] = (*mockNodeGeneric[g.SharedState])(nil)
+
 type mockNodeGeneric[T g.SharedState] struct {
 	name string
 	role g.NodeRole
 }
 
-func (m *mockNodeGeneric[T]) Accept(userInput T, runtime g.StateObserver[T]) {}
-func (m *mockNodeGeneric[T]) Name() string                                   { return m.name }
-func (m *mockNodeGeneric[T]) RoutePolicy() g.RoutePolicy[T]                  { return nil }
-func (m *mockNodeGeneric[T]) Role() g.NodeRole                               { return m.role }
+func (m *mockNodeGeneric[T]) Accept(userInput T, runtime g.StateObserver[T], config g.InvokeConfig) {}
+func (m *mockNodeGeneric[T]) Name() string                                                          { return m.name }
+func (m *mockNodeGeneric[T]) RoutePolicy() g.RoutePolicy[T]                                         { return nil }
+func (m *mockNodeGeneric[T]) Role() g.NodeRole                                                      { return m.role }
 
 func TestEdgeImplFactory_BasicCreation(t *testing.T) {
 	fromNode := &mockNode{name: "from", role: g.IntermediateNode}

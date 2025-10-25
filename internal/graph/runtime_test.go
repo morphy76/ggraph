@@ -36,11 +36,11 @@ func newMockRuntimeNode(name string, role g.NodeRole, fn g.NodeFn[RuntimeTestSta
 		role:    role,
 		fn:      fn,
 		policy:  policy,
-		mailbox: make(chan RuntimeTestState, 100),
+		mailbox: make(chan RuntimeTestState, 10),
 	}
 }
 
-func (n *mockRuntimeNode) Accept(userInput RuntimeTestState, runtime g.StateObserver[RuntimeTestState]) {
+func (n *mockRuntimeNode) Accept(userInput RuntimeTestState, runtime g.StateObserver[RuntimeTestState], config g.InvokeConfig) {
 	go func() {
 		n.mu.Lock()
 		n.callCount++
@@ -49,16 +49,16 @@ func (n *mockRuntimeNode) Accept(userInput RuntimeTestState, runtime g.StateObse
 		// Wait for message in mailbox
 		asyncInput := <-n.mailbox
 
-		currentState := runtime.CurrentState()
+		currentState := runtime.CurrentState(config.ThreadID)
 
 		if n.fn != nil {
 			newState, err := n.fn(asyncInput, currentState, func(partial RuntimeTestState) {
-				runtime.NotifyStateChange(n, userInput, partial, Replacer[RuntimeTestState], nil, true)
+				runtime.NotifyStateChange(n, config, userInput, partial, Replacer[RuntimeTestState], nil, true)
 			})
-			runtime.NotifyStateChange(n, userInput, newState, Replacer[RuntimeTestState], err, false)
+			runtime.NotifyStateChange(n, config, userInput, newState, Replacer[RuntimeTestState], err, false)
 		} else {
 			// Router node - just pass through current state
-			runtime.NotifyStateChange(n, userInput, currentState, Replacer[RuntimeTestState], nil, false)
+			runtime.NotifyStateChange(n, config, userInput, currentState, Replacer[RuntimeTestState], nil, false)
 		}
 	}()
 
@@ -366,12 +366,15 @@ func TestRuntime_Invoke_ConcurrentInvocations(t *testing.T) {
 
 	runtime.AddEdge(endEdge)
 
-	// First invocation
-	runtime.Invoke(RuntimeTestState{Value: "first"})
+	// Use the same thread ID for both invocations to test concurrency prevention
+	threadID := "test-thread-1"
 
-	// Try concurrent invocation (should fail)
+	// First invocation
+	runtime.Invoke(RuntimeTestState{Value: "first"}, g.ConfigThreadID(threadID))
+
+	// Try concurrent invocation on same thread (should fail)
 	time.Sleep(10 * time.Millisecond) // Give first invocation time to start
-	runtime.Invoke(RuntimeTestState{Value: "second"})
+	runtime.Invoke(RuntimeTestState{Value: "second"}, g.ConfigThreadID(threadID))
 
 	// Collect entries
 	errorCount := 0
@@ -405,18 +408,16 @@ func TestRuntime_CurrentState(t *testing.T) {
 	node1 := newMockRuntimeNode("Node1", g.IntermediateNode, nil, nil)
 	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
 
-	initialState := RuntimeTestState{Value: "initial", Counter: 42}
-
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, initialState)
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{Value: "initial", Counter: 42})
 	defer runtime.Shutdown()
 
-	// Cast to internal implementation to access CurrentState
-	currentState := runtime.CurrentState()
-	if currentState.Value != "initial" {
-		t.Errorf("Expected Value='initial', got '%s'", currentState.Value)
+	// Cast to internal implementation to access InitialState
+	initialState := runtime.InitialState()
+	if initialState.Value != "initial" {
+		t.Errorf("Expected Value='initial', got '%s'", initialState.Value)
 	}
-	if currentState.Counter != 42 {
-		t.Errorf("Expected Counter=42, got %d", currentState.Counter)
+	if initialState.Counter != 42 {
+		t.Errorf("Expected Counter=42, got %d", initialState.Counter)
 	}
 }
 
@@ -431,24 +432,25 @@ func TestRuntime_SetPersistentState(t *testing.T) {
 	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
 	defer runtime.Shutdown()
 
-	persistFn := func(ctx context.Context, runtimeID uuid.UUID, state RuntimeTestState) error {
+	persistFn := func(ctx context.Context, threadID string, state RuntimeTestState) error {
 		return nil
 	}
 
-	restoreFn := func(ctx context.Context, runtimeID uuid.UUID) (RuntimeTestState, error) {
+	restoreFn := func(ctx context.Context, threadID string) (RuntimeTestState, error) {
 		return RuntimeTestState{Value: "restored"}, nil
 	}
 
-	runtimeID := uuid.New()
-	runtime.SetPersistentState(persistFn, restoreFn, runtimeID)
+	runtime.SetPersistentState(persistFn, restoreFn)
+
+	threadID := uuid.NewString()
 
 	// Test that restore works
-	err := runtime.Restore()
+	err := runtime.Restore(threadID)
 	if err != nil {
 		t.Errorf("Restore() failed: %v", err)
 	}
 
-	restoredState := runtime.CurrentState()
+	restoredState := runtime.CurrentState(threadID)
 	if restoredState.Value != "restored" {
 		t.Errorf("Expected restored Value='restored', got '%s'", restoredState.Value)
 	}
@@ -465,47 +467,9 @@ func TestRuntime_Restore_WithoutPersistentState(t *testing.T) {
 	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
 	defer runtime.Shutdown()
 
-	err := runtime.Restore()
-	if err == nil {
-		t.Fatal("Expected error when restoring without persistence setup, got nil")
-	}
-
-	expectedMsg := "cannot restore the graph: restore function is not set"
-	if err.Error() != expectedMsg {
-		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
-	}
-}
-
-// TestRuntime_Restore_WithoutRuntimeID tests restore fails without runtime ID
-func TestRuntime_Restore_WithoutRuntimeID(t *testing.T) {
-	stateMonitorCh := make(chan g.StateMonitorEntry[RuntimeTestState], 10)
-
-	startNode := newMockRuntimeNode("StartNode", g.StartNode, nil, nil)
-	node1 := newMockRuntimeNode("Node1", g.IntermediateNode, nil, nil)
-	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
-
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
-	defer runtime.Shutdown()
-
-	restoreFn := func(ctx context.Context, runtimeID uuid.UUID) (RuntimeTestState, error) {
-		return RuntimeTestState{}, nil
-	}
-
-	persistFn := func(ctx context.Context, runtimeID uuid.UUID, state RuntimeTestState) error {
-		return nil
-	}
-
-	// Set functions but not runtime ID (use Nil UUID)
-	runtime.SetPersistentState(persistFn, restoreFn, uuid.Nil)
-
-	err := runtime.Restore()
-	if err == nil {
-		t.Fatal("Expected error when restoring without runtime ID, got nil")
-	}
-
-	expectedMsg := "cannot restore the graph: runtime identity is not set"
-	if err.Error() != expectedMsg {
-		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
+	err := runtime.Restore(uuid.NewString())
+	if err != nil {
+		t.Errorf("Expected no error when restoring without persistence setup, got: %v", err)
 	}
 }
 
@@ -516,14 +480,14 @@ func TestRuntime_Persistence_StateIsPersisted(t *testing.T) {
 	var persistedStates []RuntimeTestState
 	var mu sync.Mutex
 
-	persistFn := func(ctx context.Context, runtimeID uuid.UUID, state RuntimeTestState) error {
+	persistFn := func(ctx context.Context, threadID string, state RuntimeTestState) error {
 		mu.Lock()
 		persistedStates = append(persistedStates, state)
 		mu.Unlock()
 		return nil
 	}
 
-	restoreFn := func(ctx context.Context, runtimeID uuid.UUID) (RuntimeTestState, error) {
+	restoreFn := func(ctx context.Context, threadID string) (RuntimeTestState, error) {
 		return RuntimeTestState{}, nil
 	}
 
@@ -542,7 +506,7 @@ func TestRuntime_Persistence_StateIsPersisted(t *testing.T) {
 	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{Counter: 0})
 	defer runtime.Shutdown()
 
-	runtime.SetPersistentState(persistFn, restoreFn, uuid.New())
+	runtime.SetPersistentState(persistFn, restoreFn)
 	runtime.AddEdge(endEdge)
 
 	runtime.Invoke(RuntimeTestState{})
@@ -592,7 +556,7 @@ func TestRuntime_PartialStateUpdates(t *testing.T) {
 			return RuntimeTestState{Value: "final", Counter: 3}, nil
 		},
 		policy:  policy,
-		mailbox: make(chan RuntimeTestState, 100),
+		mailbox: make(chan RuntimeTestState, 10),
 	}
 	endNode := newMockRuntimeNode("EndNode", g.EndNode, nil, nil)
 
@@ -809,7 +773,7 @@ func TestRuntime_NilRoutingPolicy(t *testing.T) {
 			return currentState, nil
 		},
 		policy:  nil, // Nil policy
-		mailbox: make(chan RuntimeTestState, 100),
+		mailbox: make(chan RuntimeTestState, 10),
 	}
 	endNode := newMockRuntimeNode("EndNode", g.EndNode, nil, nil)
 
@@ -860,14 +824,98 @@ func TestRuntime_EmptyStateMonitorChannel(t *testing.T) {
 	defer runtime.Shutdown()
 
 	runtime.AddEdge(endEdge)
-	runtime.Invoke(RuntimeTestState{})
+	threadID := runtime.Invoke(RuntimeTestState{})
 
 	// Wait a bit for execution to complete
 	time.Sleep(200 * time.Millisecond)
 
 	// Check final state was updated
-	finalState := runtime.CurrentState()
+	finalState := runtime.CurrentState(threadID)
 	if finalState.Counter != 42 {
 		t.Errorf("Expected Counter=42, got %d", finalState.Counter)
+	}
+}
+
+// TestRuntime_NonPersistent_CompleteExecution tests runtime execution without any persistence setup
+func TestRuntime_NonPersistent_CompleteExecution(t *testing.T) {
+	stateMonitorCh := make(chan g.StateMonitorEntry[RuntimeTestState], 10)
+
+	policy, _ := RouterPolicyImplFactory(AnyRoute[RuntimeTestState])
+
+	startNode := newMockRuntimeNode("StartNode", g.StartNode, nil, policy)
+	node1 := newMockRuntimeNode("Node1", g.IntermediateNode, func(userInput, currentState RuntimeTestState, notify g.NotifyPartialFn[RuntimeTestState]) (RuntimeTestState, error) {
+		currentState.Counter++
+		currentState.Value = "modified"
+		return currentState, nil
+	}, policy)
+	node2 := newMockRuntimeNode("Node2", g.IntermediateNode, func(userInput, currentState RuntimeTestState, notify g.NotifyPartialFn[RuntimeTestState]) (RuntimeTestState, error) {
+		currentState.Counter++
+		currentState.Value = "final"
+		return currentState, nil
+	}, policy)
+	endNode := newMockRuntimeNode("EndNode", g.EndNode, nil, nil)
+
+	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
+	edge1 := &mockRuntimeEdge{from: node1, to: node2, role: g.IntermediateEdge}
+	edge2 := &mockRuntimeEdge{from: node2, to: endNode, role: g.EndEdge}
+
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{Counter: 0, Value: "initial"})
+	defer runtime.Shutdown()
+
+	runtime.AddEdge(edge1, edge2)
+
+	// Execute without any persistence setup
+	threadID := runtime.Invoke(RuntimeTestState{Value: "user_input"})
+
+	// Collect state monitor entries
+	var entries []g.StateMonitorEntry[RuntimeTestState]
+	timeout := time.After(2 * time.Second)
+
+	for {
+		select {
+		case entry := <-stateMonitorCh:
+			entries = append(entries, entry)
+			if !entry.Running {
+				goto done
+			}
+		case <-timeout:
+			t.Fatal("Test timed out waiting for execution to complete")
+		}
+	}
+
+done:
+	if len(entries) == 0 {
+		t.Fatal("No state monitor entries received")
+	}
+
+	// Verify execution completed successfully
+	finalEntry := entries[len(entries)-1]
+	if finalEntry.Error != nil {
+		t.Errorf("Expected no error, got: %v", finalEntry.Error)
+	}
+
+	// Check final state
+	if finalEntry.NewState.Counter != 2 {
+		t.Errorf("Expected Counter=2, got %d", finalEntry.NewState.Counter)
+	}
+	if finalEntry.NewState.Value != "final" {
+		t.Errorf("Expected Value='final', got '%s'", finalEntry.NewState.Value)
+	}
+
+	// Verify state is accessible via CurrentState
+	currentState := runtime.CurrentState(threadID)
+	if currentState.Counter != 2 {
+		t.Errorf("CurrentState Counter expected 2, got %d", currentState.Counter)
+	}
+	if currentState.Value != "final" {
+		t.Errorf("CurrentState Value expected 'final', got '%s'", currentState.Value)
+	}
+
+	// Verify nodes were called
+	if node1.GetCallCount() != 1 {
+		t.Errorf("Expected node1 to be called once, got %d", node1.GetCallCount())
+	}
+	if node2.GetCallCount() != 1 {
+		t.Errorf("Expected node2 to be called once, got %d", node2.GetCallCount())
 	}
 }

@@ -1,6 +1,10 @@
 package graph
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/google/uuid"
+)
 
 var (
 	// ErrRuntimeExecuting indicates that the runtime is already executing and cannot accept another invocation.
@@ -13,10 +17,12 @@ var (
 	ErrNoPathToEnd = errors.New("no path from start edge to any end edge")
 	// ErrRestoreNotSet indicates that the restore function is not set.
 	ErrRestoreNotSet = errors.New("restore function is not set")
-	// ErrRuntimeIDNotSet indicates that the runtime identity is not set.
-	ErrRuntimeIDNotSet = errors.New("runtime identity is not set")
 	// ErrPersistenceQueueFull indicates that the persistence queue is full.
 	ErrPersistenceQueueFull = errors.New("persistence queue is full")
+	// ErrEvictionByInactivity indicates that a thread was evicted due to inactivity.
+	ErrEvictionByInactivity = errors.New("thread evicted due to inactivity")
+	// ErrUnknownThreadID indicates that the provided thread ID is unknown.
+	ErrUnknownThreadID = errors.New("unknown thread ID")
 )
 
 // Connected provides methods for building and validating the graph structure.
@@ -68,6 +74,88 @@ type Connected[T SharedState] interface {
 	//	}
 	//	runtime.Invoke(userInput)
 	Validate() error
+}
+
+// InvokeConfig holds configuration options for invoking the runtime.
+//
+// This struct allows you to specify parameters that influence the execution
+// of the graph during an invocation. Currently, it supports setting a ThreadID
+// to enable concurrent executions within the same runtime instance.
+//
+// Example:
+//
+//	config := InvokeConfig{
+//	    ThreadID: "thread-123",
+//	}
+//	runtime.Invoke(userInput, config)
+type InvokeConfig struct {
+	// ThreadID is the identifier for the thread executing the invocation.
+	ThreadID string
+}
+
+// MergeInvokeConfig merges multiple InvokeConfig instances into one.
+//
+// When merging, non-empty fields from later configurations override those
+// from earlier ones. This allows for flexible configuration by combining
+// multiple sources.
+//
+// Parameters:
+//   - config: One or more InvokeConfig instances to merge.
+//
+// Returns:
+//   - A single InvokeConfig instance containing the merged settings.
+//
+// Example:
+//
+//	baseConfig := InvokeConfig{ThreadID: "base-thread"}
+//	overrideConfig := InvokeConfig{ThreadID: "override-thread"}
+//
+//	mergedConfig := MergeInvokeConfig(baseConfig, overrideConfig)
+//	// mergedConfig.ThreadID will be "override-thread"
+func MergeInvokeConfig(config ...InvokeConfig) InvokeConfig {
+	merged := InvokeConfig{}
+	for _, c := range config {
+		if c.ThreadID != "" {
+			merged.ThreadID = c.ThreadID
+		}
+	}
+	return merged
+}
+
+// DefaultInvokeConfig creates an InvokeConfig with default settings.
+//
+// The default configuration generates a unique ThreadID using a UUID.
+// This ensures that each invocation has its own distinct thread context.
+//
+// Returns:
+//   - An InvokeConfig instance with default settings.
+//
+// Example:
+//
+//	defaultConfig := DefaultInvokeConfig()
+//	runtime.Invoke(userInput, defaultConfig)
+func DefaultInvokeConfig() InvokeConfig {
+	return InvokeConfig{
+		ThreadID: uuid.NewString(),
+	}
+}
+
+// ConfigThreadID creates an InvokeConfig with the specified ThreadID.
+//
+// This helper function simplifies the creation of an InvokeConfig when only
+// the ThreadID needs to be set.
+// // Parameters:
+//   - threadID: The identifier for the thread executing the invocation.
+//
+// Returns:
+//   - An InvokeConfig instance with the specified ThreadID.
+//
+// Example:
+//
+//	threadConfig := ConfigThreadID("custom-thread-1")
+//	runtime.Invoke(userInput, threadConfig)
+func ConfigThreadID(threadID string) InvokeConfig {
+	return InvokeConfig{ThreadID: threadID}
 }
 
 // Runtime represents the execution engine for graph-based workflows.
@@ -131,6 +219,11 @@ type Runtime[T SharedState] interface {
 	// Parameters:
 	//   - userInput: The input state to process. This is passed to all nodes and
 	//     routing policies but is never modified by the runtime.
+	//   - config: Optional configuration settings for this invocation.
+	//
+	// Returns:
+	//   - The ThreadID used for this invocation, which can be specified in the
+	//     InvokeConfig.
 	//
 	// Example:
 	//
@@ -150,7 +243,7 @@ type Runtime[T SharedState] interface {
 	//	        break
 	//	    }
 	//	}
-	Invoke(userInput T)
+	Invoke(userInput T, config ...InvokeConfig) string
 	// TODO invoke with context
 	// InvokeWithContext(ctx context.Context, entryState T)
 
