@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"time"
 
 	b "github.com/morphy76/ggraph/pkg/builders"
 	g "github.com/morphy76/ggraph/pkg/graph"
@@ -103,50 +104,67 @@ func main() {
 	graph.SetMemory(memory)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	monitor := func() {
+	var threadID string
+	interruptSignaled := false
+	resumeStarted := false
+	done := make(chan bool)
+
+	// Single monitor that handles both invocations
+	go func() {
+		defer close(done)
 		for entry := range stateMonitorCh {
-			fmt.Printf("📊 Monitor: Node=%s, Running=%v, Error=%v, State=%+v\n", entry.Node, entry.Running, entry.Error, entry.NewState)
-			if !entry.Running {
-				if entry.Error != nil {
-					fmt.Printf("❌ Error: %v\n", entry.Error)
-				} else {
-					fmt.Printf("✅ Success! Target was %d, found in %d tries\n", entry.NewState.Target, entry.NewState.Tries)
+			prefix := "First"
+			if resumeStarted {
+				prefix = "Resumed"
+			}
+			fmt.Printf("📊 [%s] Node=%s, Running=%v\n", prefix, entry.Node, entry.Running)
+
+			if entry.Running {
+				// Cancel after first HintNode to demonstrate interruption
+				if entry.Node == "HintNode" && !interruptSignaled {
+					interruptSignaled = true
+					fmt.Printf("🛑 Requesting cancellation after first hint...\n")
+					cancel()
 				}
-				break
-			} else if entry.Node == "HintNode" {
-				cancel()
-				fmt.Printf("🛑 Cancellation requested!\n")
-				break
+			} else {
+				// Execution finished (either completed or error)
+				if entry.Error != nil {
+					fmt.Printf("❌ [%s] Execution stopped: %v\n", prefix, entry.Error)
+					// If this was the first invocation error, continue monitoring for resume
+					if !resumeStarted {
+						continue
+					}
+				} else {
+					fmt.Printf("✅ [%s] Success! Target was %d, found in %d tries\n", prefix, entry.NewState.Target, entry.NewState.Tries)
+				}
+				return
 			}
 		}
-	}
+	}()
 
-	go monitor()
-
-	threadID := graph.Invoke(
+	// Start first invocation (will be interrupted)
+	threadID = graph.Invoke(
 		gameState{},
 		g.InvokeConfigContext(ctx),
 	)
 
-	fmt.Printf("🚀 Game stopped! Memory state: %+v\n", memory)
+	// Wait for context cancellation to propagate
 	<-ctx.Done()
 
-	// Create a new context for resuming execution
+	// Small delay to ensure the runtime processes the cancellation
+	// and sends the final error state to the monitor channel
+	time.Sleep(50 * time.Millisecond)
+
+	fmt.Printf("\n🔄 Resuming execution with ThreadID: %s\n\n", threadID)
+	resumeStarted = true
+
+	// Resume execution with a new context
 	graph.Invoke(
 		gameState{},
 		g.InvokeConfigThreadID(threadID),
 		g.InvokeConfigContext(context.Background()),
 	)
 
-	for entry := range stateMonitorCh {
-		fmt.Printf("📊 Monitor: Node=%s, Running=%v, Error=%v, State=%+v\n", entry.Node, entry.Running, entry.Error, entry.NewState)
-		if !entry.Running {
-			if entry.Error != nil {
-				fmt.Printf("❌ Error: %v\n", entry.Error)
-			} else {
-				fmt.Printf("✅ Success! Target was %d, found in %d tries\n", entry.NewState.Target, entry.NewState.Tries)
-			}
-			break
-		}
-	}
+	// Wait for execution to complete
+	<-done
 }
