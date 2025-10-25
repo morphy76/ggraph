@@ -185,6 +185,8 @@ func InvokeConfigContext(ctx context.Context) InvokeConfig {
 	return InvokeConfig{Context: ctx}
 }
 
+// TODO pluggable log
+// TODO observability hooks
 // Runtime represents the execution engine for graph-based workflows.
 //
 // The Runtime is the central component that manages graph execution. It:
@@ -228,6 +230,9 @@ type Runtime[T SharedState] interface {
 
 	// Embeds Persistent to provide state persistence capabilities.
 	Persistent[T]
+
+	// Embeds Threaded to provide active thread retrieval capabilities.
+	Threaded
 
 	// Invoke starts the graph execution with the provided user input.
 	//

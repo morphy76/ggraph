@@ -27,8 +27,9 @@ func RuntimeFactory[T g.SharedState](
 	}
 	ctx, cancelFn := context.WithCancel(context.Background())
 	rv := &runtimeImpl[T]{
-		ctx:    ctx,
-		cancel: cancelFn,
+		ctx:         ctx,
+		cancel:      cancelFn,
+		runtimeLock: &sync.RWMutex{},
 
 		outcomeCh:      make(chan nodeFnReturnStruct[T], 1000),
 		stateMonitorCh: stateMonitorCh,
@@ -38,7 +39,7 @@ func RuntimeFactory[T g.SharedState](
 
 		initialState:    initialState,
 		state:           make(map[string]T),
-		stateChangeLock: make(map[string]*sync.Mutex),
+		stateChangeLock: make(map[string]*sync.RWMutex),
 
 		executing: make(map[string]*atomic.Bool),
 
@@ -60,6 +61,8 @@ func RuntimeFactory[T g.SharedState](
 
 var _ g.Runtime[g.SharedState] = (*runtimeImpl[g.SharedState])(nil)
 var _ g.StateObserver[g.SharedState] = (*runtimeImpl[g.SharedState])(nil)
+var _ g.Persistent[g.SharedState] = (*runtimeImpl[g.SharedState])(nil)
+var _ g.Threaded = (*runtimeImpl[g.SharedState])(nil)
 
 type nodeFnReturnStruct[T g.SharedState] struct {
 	node        g.Node[T]
@@ -72,8 +75,9 @@ type nodeFnReturnStruct[T g.SharedState] struct {
 }
 
 type runtimeImpl[T g.SharedState] struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx         context.Context
+	cancel      context.CancelFunc
+	runtimeLock *sync.RWMutex
 
 	outcomeCh      chan nodeFnReturnStruct[T]
 	stateMonitorCh chan g.StateMonitorEntry[T]
@@ -83,7 +87,7 @@ type runtimeImpl[T g.SharedState] struct {
 
 	initialState    T
 	state           map[string]T
-	stateChangeLock map[string]*sync.Mutex
+	stateChangeLock map[string]*sync.RWMutex
 
 	executing map[string]*atomic.Bool
 
@@ -103,6 +107,11 @@ func (r *runtimeImpl[T]) Invoke(userInput T, configs ...g.InvokeConfig) string {
 	useConfig := g.MergeInvokeConfig(g.DefaultInvokeConfig(), requestedConfig)
 
 	if !r.threadExistsWithinTTL(useConfig.ThreadID) {
+
+		r.runtimeLock.Lock()
+		r.state[useConfig.ThreadID] = r.initialState
+		r.runtimeLock.Unlock()
+
 		_ = r.Restore(useConfig.ThreadID)
 	}
 
@@ -152,6 +161,8 @@ func (r *runtimeImpl[T]) Shutdown() {
 	select {
 	case <-done:
 	case <-ctx.Done():
+		close(r.pendingPersist)
+		close(r.outcomeCh)
 	}
 }
 
@@ -168,13 +179,15 @@ func (r *runtimeImpl[T]) NotifyStateChange(
 }
 
 func (r *runtimeImpl[T]) CurrentState(threadID string) T {
-	useLock := r.lockByThreadID(threadID)
-	useLock.Lock()
-	defer useLock.Unlock()
+	r.runtimeLock.RLock()
+	defer r.runtimeLock.RUnlock()
 
 	useState := r.initialState
-	if state, exists := r.state[threadID]; exists {
-		useState = state
+	if _, exists := r.state[threadID]; exists {
+		useLock := r.lockByThreadID(threadID)
+		useLock.RLock()
+		useState = r.state[threadID]
+		useLock.RUnlock()
 	}
 	return useState
 }
@@ -203,11 +216,23 @@ func (r *runtimeImpl[T]) Restore(threadID string) error {
 
 	useLock := r.lockByThreadID(threadID)
 	useLock.Lock()
+	defer useLock.Unlock()
+
 	r.state[threadID] = restoredState
 	r.lastPersisted[threadID] = restoredState
-	useLock.Unlock()
 
 	return nil
+}
+
+func (r *runtimeImpl[T]) ListThreads() []string {
+	r.runtimeLock.RLock()
+	defer r.runtimeLock.RUnlock()
+
+	threads := make([]string, 0, len(r.state))
+	for threadID := range r.state {
+		threads = append(threads, threadID)
+	}
+	return threads
 }
 
 func (r *runtimeImpl[T]) persistState(threadID string) error {
@@ -216,8 +241,8 @@ func (r *runtimeImpl[T]) persistState(threadID string) error {
 	}
 
 	useLock := r.lockByThreadID(threadID)
-	useLock.Lock()
-	defer useLock.Unlock()
+	useLock.RLock()
+	defer useLock.RUnlock()
 
 	currentState := r.state[threadID]
 	lastPersisted := r.lastPersisted[threadID]
@@ -491,27 +516,31 @@ func (r *runtimeImpl[T]) executingByThreadID(config g.InvokeConfig) *atomic.Bool
 	return exec
 }
 
-func (r *runtimeImpl[T]) lockByThreadID(threadID string) *sync.Mutex {
+func (r *runtimeImpl[T]) lockByThreadID(threadID string) *sync.RWMutex {
 	lock, exists := r.stateChangeLock[threadID]
 	if !exists {
-		lock = &sync.Mutex{}
+		lock = &sync.RWMutex{}
 		r.stateChangeLock[threadID] = lock
 	}
 	return lock
 }
 
 func (r *runtimeImpl[T]) threadExistsWithinTTL(threadID string) bool {
+	useLock := r.lockByThreadID(threadID)
+	useLock.RLock()
+	defer useLock.RUnlock()
+
 	ttl, exists := r.threadTTL[threadID]
 	return exists && time.Now().Before(ttl)
 }
 
 func (r *runtimeImpl[T]) clearThread(threadID string) {
-	delete(r.threadTTL, threadID)
 	useLock := r.lockByThreadID(threadID)
 	useLock.Lock()
-	delete(r.state, threadID)
-	useLock.Unlock()
+	defer useLock.Unlock()
 
+	delete(r.threadTTL, threadID)
+	delete(r.state, threadID)
 	delete(r.executing, threadID)
 	delete(r.lastPersisted, threadID)
 	delete(r.stateChangeLock, threadID)

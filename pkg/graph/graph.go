@@ -230,3 +230,23 @@ type Persistent[T SharedState] interface {
 	//	runtime.Invoke(userInput)
 	Restore(threadID string) error
 }
+
+// Threaded is an interface for retrieving active thread identifiers in a runtime.
+//
+// This interface allows users to query the runtime for a list of currently
+// active thread IDs, enabling management and monitoring of concurrent
+// graph executions.
+type Threaded interface {
+	// ListThreads returns a slice of active thread IDs.
+	//
+	// Returns:
+	//   - A slice of strings representing the active thread identifiers.
+	//
+	// Example:
+	//
+	//	threads := runtime.ListThreads()
+	//	for _, threadID := range threads {
+	//	    fmt.Println("Active thread:", threadID)
+	//	}
+	ListThreads() []string
+}
