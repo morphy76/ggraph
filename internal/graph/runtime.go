@@ -179,15 +179,13 @@ func (r *runtimeImpl[T]) NotifyStateChange(
 }
 
 func (r *runtimeImpl[T]) CurrentState(threadID string) T {
-	r.runtimeLock.RLock()
-	defer r.runtimeLock.RUnlock()
+	useLock := r.lockByThreadID(threadID)
+	useLock.RLock()
+	defer useLock.RUnlock()
 
-	useState := r.initialState
-	if _, exists := r.state[threadID]; exists {
-		useLock := r.lockByThreadID(threadID)
-		useLock.RLock()
-		useState = r.state[threadID]
-		useLock.RUnlock()
+	useState, exists := r.state[threadID]
+	if !exists {
+		useState = r.initialState
 	}
 	return useState
 }
@@ -517,11 +515,13 @@ func (r *runtimeImpl[T]) executingByThreadID(config g.InvokeConfig) *atomic.Bool
 }
 
 func (r *runtimeImpl[T]) lockByThreadID(threadID string) *sync.RWMutex {
+	r.runtimeLock.Lock()
 	lock, exists := r.stateChangeLock[threadID]
 	if !exists {
 		lock = &sync.RWMutex{}
 		r.stateChangeLock[threadID] = lock
 	}
+	r.runtimeLock.Unlock()
 	return lock
 }
 
