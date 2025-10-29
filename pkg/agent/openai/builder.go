@@ -84,8 +84,8 @@ func NewClient(
 	opts ...option.RequestOption,
 ) openai.Client {
 	useOpts := append(opts,
-		option.WithBaseURL(""),
-		option.WithAPIKey(""),
+		option.WithBaseURL(baseURL),
+		option.WithAPIKey(apiKey),
 	)
 	return openai.NewClient(useOpts...)
 }

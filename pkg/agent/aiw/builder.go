@@ -13,7 +13,7 @@ import (
 
 const (
 	// AIWBaseURL is the base URL for the Almawave AIW Platform.
-	AIWBaseURL = "https://api.ai21.com/studio/v1/j1-chat/complete"
+	AIWBaseURL = "https://portal.aiwave.ai/llm/api"
 	// EnvKeyPAT is the environment variable key for the AIW API key.
 	EnvKeyPAT = "AIW_API_KEY"
 )
