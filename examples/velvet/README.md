@@ -1,6 +1,6 @@
-# Velvet Example - Educational Q&A Evaluation
+# Velvet Example - Educational Q&A Evaluation (Concurrent)
 
-This example demonstrates a graph using AIW (Almawave) conversational nodes with different Velvet models to create an automated educational question-answer-evaluation flow.
+This example demonstrates a graph using AIW (Almawave) conversational nodes with different Velvet models to create an automated educational question-answer-evaluation flow **with concurrent execution across multiple threads**.
 
 ## Overview
 
@@ -12,6 +12,29 @@ The graph consists of three nodes that work together:
 
 All nodes communicate in Italian 🇮🇹
 
+## Prompt
+
+```text
+create an example of a graph, named velvet which:
+
+- uses the aiw conversational nodes
+- a first node is instructed to be an high school teacher which generates a random question about general culture or any high school topic
+- the first node uses the velvet2b model
+- a second node, using velvet25b model, answers to the question
+- a third node, instructed to be an expert linguistic, using velvet14b evaluates the answer of the second node in terms of grammar, lexical correctness
+- the output of the third node is a score from 0 to 10, where 10 is the max, for each evaluation it did and a very small comment about its evaluation
+- the output is formatted to be a json document
+- all the nodes speaks italian
+- there is no need of user input
+```
+
+```text
+itera su N thread concorrenti, traccia il progresso per thread, genera una media delle valutazioni, il numero di thread concorrenti è:
+
+- determinato da user input
+- distribuito su un periodo temporale determinato da user input, specificato in secondi
+```
+
 ## Flow
 
 ```
@@ -20,30 +43,65 @@ TeacherNode → StudentNode → EvaluatorNode
  question)     question)      answer)
 ```
 
-## Evaluation Output
+## Concurrent Execution
 
-The evaluator provides a JSON-formatted assessment with:
-- **Grammar score** (0-10): Grammatical correctness evaluation with a brief comment
-- **Lexical score** (0-10): Lexical correctness evaluation with a brief comment
+The example runs **N threads concurrently**, where N is determined by user input. The threads are distributed over a specified time period:
 
-Example output:
-```json
-{
-  "grammatica": {
-    "punteggio": 9,
-    "commento": "Frase ben strutturata con uso corretto dei tempi verbali"
-  },
-  "lessico": {
-    "punteggio": 8,
-    "commento": "Vocabolario appropriato con buona varietà lessicale"
-  }
-}
+- **Number of threads**: User-defined (e.g., 5, 10, 20...)
+- **Time period**: User-defined in seconds (e.g., 30, 60, 120...)
+- **Thread distribution**: Threads start at evenly-spaced intervals across the time period
+
+### Example
+If you specify:
+- 10 threads
+- 30 seconds time period
+
+The system will start one thread every 3 seconds (30 seconds / 10 threads).
+
+## Progress Tracking
+
+The application provides **real-time progress tracking** for each thread:
+- Live updates showing the current state of each thread
+- Status indicators for each node execution
+- Visual progress display refreshed every 500ms
+
+## Evaluation & Statistics
+
+At the end of execution, the system provides:
+- **Average scores** across all successful evaluations:
+  - Average Grammar score (0-10)
+  - Average Lexical score (0-10)
+  - Average Content correctness score (0-10)
+  - Overall average
+- **Success rate**: Percentage of threads completed successfully
+- **Detailed per-thread results**: Individual scores and comments for each thread
+- **Execution time**: Duration for each thread and total execution time
+
+### Evaluation Criteria
+
+The expert linguist evaluates three aspects:
+1. **Grammatica** (Grammar): Grammatical correctness and sentence structure
+2. **Lessico** (Lexical): Vocabulary appropriateness and word choice
+3. **Contenuto** (Content): Correctness and relevance of the answer to the question
+
+### Example Output
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 MEDIA DELLE VALUTAZIONI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Valutazioni riuscite: 8/10 (80.0%)
+
+Grammatica: 8.25/10
+Lessico:    7.88/10
+Contenuto:  8.50/10
+Media tot.: 8.21/10
 ```
 
 ## Requirements
 
 - AIW (Almawave) API access
 - `AIW_API_KEY` environment variable set with your API key
+- Sufficient API quota for concurrent requests
 
 ## Running the Example
 
@@ -52,13 +110,51 @@ export AIW_API_KEY="your-api-key-here"
 go run run.go
 ```
 
+When prompted:
+1. Enter the number of concurrent threads (e.g., 10)
+2. Enter the time period in seconds (e.g., 60)
+3. Choose verbose mode:
+   - **`s` (Sì)**: Shows all questions, answers, and evaluations in real-time
+   - **`n` (No)**: Shows only progress indicators (faster, cleaner output)
+4. Press Enter to start the execution
+
+Or use the Makefile:
+```bash
+make run-velvet-ex
+```
+
+### Verbose Mode
+
+- **Verbose ON (`s`)**: Displays detailed output for each thread including:
+  - 📚 Questions generated by the teacher
+  - 🎓 Answers provided by the student
+  - 📊 JSON evaluations from the linguist
+  - Real-time status updates
+
+- **Verbose OFF (`n`)**: Shows a compact progress dashboard with:
+  - Current status of each thread
+  - Progress indicators
+  - Updates every 500ms
+
 ## Features
 
-- **No user input required**: The graph runs autonomously
-- **Multi-model architecture**: Uses three different Velvet model sizes optimized for different tasks
-- **Structured output**: Evaluation results are formatted as JSON for easy parsing
-- **Italian language**: All interactions are in Italian
-- **Real-time monitoring**: Shows the progress of each node as it executes
+- ✅ **Concurrent execution**: Multiple threads running in parallel
+- ✅ **Time-distributed launch**: Threads start at evenly-spaced intervals
+- ✅ **Real-time progress**: Live monitoring of all threads
+- ✅ **Statistical analysis**: Average scores and success rates
+- ✅ **Per-thread details**: Individual results for each execution
+- ✅ **Multi-model architecture**: Three different Velvet model sizes
+- ✅ **Structured output**: JSON-formatted evaluations
+- ✅ **Italian language**: All interactions in Italian
+
+## Use Cases
+
+This example is useful for:
+- **Load testing** AIW API endpoints
+- **Benchmarking** model performance across multiple runs
+- **Statistical analysis** of model consistency
+- **Parallel processing** of educational assessments
+- **Performance evaluation** under concurrent load
 
 ## Notes
 
@@ -66,3 +162,5 @@ go run run.go
 - The velvet-25b model provides comprehensive answers
 - The velvet-14b model offers detailed linguistic analysis
 - All models are accessed through the AIW Platform API
+- Each thread runs independently with its own conversation state
+- Progress updates are synchronized using mutexes to avoid race conditions
