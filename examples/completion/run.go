@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/option"
 
 	a "github.com/morphy76/ggraph/pkg/agent"
 	"github.com/morphy76/ggraph/pkg/agent/aiw"
@@ -19,21 +18,18 @@ import (
 )
 
 // CompletionNodeFn creates a completion node that generates text based on a prompt using chat completions
-var CompletionNodeFn o.CompletionNodeFn = func(completionService openai.CompletionService, model string, opts ...option.RequestOption) g.NodeFn[a.Completion] {
+var CompletionNodeFn o.CompletionNodeFn = func(completionService openai.CompletionService, model string, opts ...a.CompletionOption) g.NodeFn[a.Completion] {
 	return func(userInput, currentState a.Completion, notify g.NotifyPartialFn[a.Completion]) (a.Completion, error) {
 		// Check if there's a user prompt in the conversation, or use a default
 		prompt := "Use the family guy style: answer in the same way Peter Griffin would. The request is within boundaries defined by !!![ and ]!!!. Do not put boundaries in the final answer. Requested completion is:\n!!![\n%s\n]!!!"
 
-		// Create the chat completion request
-		usePrompt := openai.CompletionNewParamsPromptUnion{
-			OfString: openai.String(fmt.Sprintf(prompt, userInput.Text)),
+		useOpts, err := a.CreateCompletionOptions(model, fmt.Sprintf(prompt, userInput.Text), opts...)
+		if err != nil {
+			return currentState, fmt.Errorf("failed to create completion options: %w", err)
 		}
 
-		resp, err := completionService.New(context.Background(), openai.CompletionNewParams{
-			User:   openai.String("ggraph"),
-			Model:  openai.CompletionNewParamsModel(model),
-			Prompt: usePrompt,
-		})
+		openAIOpts := o.ConvertCompletionOptions(useOpts)
+		resp, err := completionService.New(context.Background(), openAIOpts)
 		if err != nil {
 			return currentState, fmt.Errorf("failed to generate completion: %w", err)
 		}
@@ -72,12 +68,16 @@ func main() {
 		log.Fatal("Environment variable not set to fetch the API key.")
 	}
 
+	client := aiw.NewAIWClient(apiKey)
+
 	// Create the completion node
 	completionNode, err := aiw.CreateCompletionNode(
 		"CompletionNode",
-		apiKey,
 		"velvet-2b",
+		client,
 		CompletionNodeFn,
+		a.WithTemperature(0.7),
+		a.WithFrequencyPenalty(0.5),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create completion node: %v", err)
