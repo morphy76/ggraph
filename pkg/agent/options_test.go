@@ -41,8 +41,12 @@ func TestWithBestOf(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("WithBestOf().ApplyToCompletion() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !tt.wantErr && opts.BestOf != tt.bestOf {
-				t.Errorf("Expected BestOf %d, got %d", tt.bestOf, opts.BestOf)
+			if !tt.wantErr && (opts.BestOf == nil || *opts.BestOf != tt.bestOf) {
+				if opts.BestOf == nil {
+					t.Errorf("Expected BestOf %d, got nil", tt.bestOf)
+				} else {
+					t.Errorf("Expected BestOf %d, got %d", tt.bestOf, *opts.BestOf)
+				}
 			}
 		})
 	}
@@ -72,8 +76,12 @@ func TestWithEcho(t *testing.T) {
 			if err != nil {
 				t.Errorf("WithEcho().ApplyToCompletion() unexpected error = %v", err)
 			}
-			if opts.Echo != tt.echo {
-				t.Errorf("Expected Echo %v, got %v", tt.echo, opts.Echo)
+			if opts.Echo == nil || *opts.Echo != tt.echo {
+				if opts.Echo == nil {
+					t.Errorf("Expected Echo %v, got nil", tt.echo)
+				} else {
+					t.Errorf("Expected Echo %v, got %v", tt.echo, *opts.Echo)
+				}
 			}
 		})
 	}
@@ -131,8 +139,12 @@ func TestWithFrequencyPenalty(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("WithFrequencyPenalty().ApplyToCompletion() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !tt.wantErr && opts.FrequencyPenalty != tt.frequencyPenalty {
-				t.Errorf("Expected FrequencyPenalty %f, got %f", tt.frequencyPenalty, opts.FrequencyPenalty)
+			if !tt.wantErr && (opts.FrequencyPenalty == nil || *opts.FrequencyPenalty != tt.frequencyPenalty) {
+				if opts.FrequencyPenalty == nil {
+					t.Errorf("Expected FrequencyPenalty %f, got nil", tt.frequencyPenalty)
+				} else {
+					t.Errorf("Expected FrequencyPenalty %f, got %f", tt.frequencyPenalty, *opts.FrequencyPenalty)
+				}
 			}
 		})
 	}
@@ -180,8 +192,12 @@ func TestWithLogprobs(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("WithLogprobs().ApplyToCompletion() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !tt.wantErr && opts.Logprobs != tt.logprobs {
-				t.Errorf("Expected Logprobs %d, got %d", tt.logprobs, opts.Logprobs)
+			if !tt.wantErr && (opts.Logprobs == nil || *opts.Logprobs != tt.logprobs) {
+				if opts.Logprobs == nil {
+					t.Errorf("Expected Logprobs %d, got nil", tt.logprobs)
+				} else {
+					t.Errorf("Expected Logprobs %d, got %d", tt.logprobs, *opts.Logprobs)
+				}
 			}
 		})
 	}
@@ -229,8 +245,12 @@ func TestWithMaxTokens(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("WithMaxTokens().ApplyToCompletion() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !tt.wantErr && opts.MaxTokens != tt.maxTokens {
-				t.Errorf("Expected MaxTokens %d, got %d", tt.maxTokens, opts.MaxTokens)
+			if !tt.wantErr && (opts.MaxTokens == nil || *opts.MaxTokens != tt.maxTokens) {
+				if opts.MaxTokens == nil {
+					t.Errorf("Expected MaxTokens %d, got nil", tt.maxTokens)
+				} else {
+					t.Errorf("Expected MaxTokens %d, got %d", tt.maxTokens, *opts.MaxTokens)
+				}
 			}
 		})
 	}
@@ -278,8 +298,12 @@ func TestWithN(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("WithN().ApplyToCompletion() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !tt.wantErr && opts.N != tt.n {
-				t.Errorf("Expected N %d, got %d", tt.n, opts.N)
+			if !tt.wantErr && (opts.N == nil || *opts.N != tt.n) {
+				if opts.N == nil {
+					t.Errorf("Expected N %d, got nil", tt.n)
+				} else {
+					t.Errorf("Expected N %d, got %d", tt.n, *opts.N)
+				}
 			}
 		})
 	}
@@ -337,8 +361,12 @@ func TestWithPresencePenalty(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("WithPresencePenalty().ApplyToCompletion() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !tt.wantErr && opts.PresencePenalty != tt.presencePenalty {
-				t.Errorf("Expected PresencePenalty %f, got %f", tt.presencePenalty, opts.PresencePenalty)
+			if !tt.wantErr && (opts.PresencePenalty == nil || *opts.PresencePenalty != tt.presencePenalty) {
+				if opts.PresencePenalty == nil {
+					t.Errorf("Expected PresencePenalty %f, got nil", tt.presencePenalty)
+				} else {
+					t.Errorf("Expected PresencePenalty %f, got %f", tt.presencePenalty, *opts.PresencePenalty)
+				}
 			}
 		})
 	}
@@ -376,8 +404,12 @@ func TestWithSeed(t *testing.T) {
 			if err != nil {
 				t.Errorf("WithSeed().ApplyToCompletion() unexpected error = %v", err)
 			}
-			if opts.Seed != tt.seed {
-				t.Errorf("Expected Seed %d, got %d", tt.seed, opts.Seed)
+			if opts.Seed == nil || *opts.Seed != tt.seed {
+				if opts.Seed == nil {
+					t.Errorf("Expected Seed %d, got nil", tt.seed)
+				} else {
+					t.Errorf("Expected Seed %d, got %d", tt.seed, *opts.Seed)
+				}
 			}
 		})
 	}
@@ -435,8 +467,12 @@ func TestWithTemperature(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("WithTemperature().ApplyToCompletion() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !tt.wantErr && opts.Temperature != tt.temperature {
-				t.Errorf("Expected Temperature %f, got %f", tt.temperature, opts.Temperature)
+			if !tt.wantErr && (opts.Temperature == nil || *opts.Temperature != tt.temperature) {
+				if opts.Temperature == nil {
+					t.Errorf("Expected Temperature %f, got nil", tt.temperature)
+				} else {
+					t.Errorf("Expected Temperature %f, got %f", tt.temperature, *opts.Temperature)
+				}
 			}
 		})
 	}
@@ -494,8 +530,12 @@ func TestWithTopP(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("WithTopP().ApplyToCompletion() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !tt.wantErr && opts.TopP != tt.topP {
-				t.Errorf("Expected TopP %f, got %f", tt.topP, opts.TopP)
+			if !tt.wantErr && (opts.TopP == nil || *opts.TopP != tt.topP) {
+				if opts.TopP == nil {
+					t.Errorf("Expected TopP %f, got nil", tt.topP)
+				} else {
+					t.Errorf("Expected TopP %f, got %f", tt.topP, *opts.TopP)
+				}
 			}
 		})
 	}
@@ -529,8 +569,12 @@ func TestWithUser(t *testing.T) {
 			if err != nil {
 				t.Errorf("WithUser().ApplyToCompletion() unexpected error = %v", err)
 			}
-			if opts.User != tt.user {
-				t.Errorf("Expected User '%s', got '%s'", tt.user, opts.User)
+			if opts.User == nil || *opts.User != tt.user {
+				if opts.User == nil {
+					t.Errorf("Expected User '%s', got nil", tt.user)
+				} else {
+					t.Errorf("Expected User '%s', got '%s'", tt.user, *opts.User)
+				}
 			}
 		})
 	}
@@ -578,8 +622,12 @@ func TestWithMaxCompletionTokens(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("WithMaxCompletionTokens().ApplyToCompletion() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !tt.wantErr && opts.MaxCompletionTokens != tt.maxCompletionTokens {
-				t.Errorf("Expected MaxCompletionTokens %d, got %d", tt.maxCompletionTokens, opts.MaxCompletionTokens)
+			if !tt.wantErr && (opts.MaxCompletionTokens == nil || *opts.MaxCompletionTokens != tt.maxCompletionTokens) {
+				if opts.MaxCompletionTokens == nil {
+					t.Errorf("Expected MaxCompletionTokens %d, got nil", tt.maxCompletionTokens)
+				} else {
+					t.Errorf("Expected MaxCompletionTokens %d, got %d", tt.maxCompletionTokens, *opts.MaxCompletionTokens)
+				}
 			}
 		})
 	}
@@ -597,8 +645,12 @@ func TestModelOptionApplyToConversation(t *testing.T) {
 			option:  WithTemperature(0.8),
 			wantErr: false,
 			validate: func(t *testing.T, opts *ModelOptions) {
-				if opts.Temperature != 0.8 {
-					t.Errorf("Expected Temperature 0.8, got %f", opts.Temperature)
+				if opts.Temperature == nil || *opts.Temperature != 0.8 {
+					if opts.Temperature == nil {
+						t.Errorf("Expected Temperature 0.8, got nil")
+					} else {
+						t.Errorf("Expected Temperature 0.8, got %f", *opts.Temperature)
+					}
 				}
 			},
 		},
@@ -612,8 +664,12 @@ func TestModelOptionApplyToConversation(t *testing.T) {
 			option:  WithMaxCompletionTokens(300),
 			wantErr: false,
 			validate: func(t *testing.T, opts *ModelOptions) {
-				if opts.MaxCompletionTokens != 300 {
-					t.Errorf("Expected MaxCompletionTokens 300, got %d", opts.MaxCompletionTokens)
+				if opts.MaxCompletionTokens == nil || *opts.MaxCompletionTokens != 300 {
+					if opts.MaxCompletionTokens == nil {
+						t.Errorf("Expected MaxCompletionTokens 300, got nil")
+					} else {
+						t.Errorf("Expected MaxCompletionTokens 300, got %d", *opts.MaxCompletionTokens)
+					}
 				}
 			},
 		},
@@ -622,8 +678,12 @@ func TestModelOptionApplyToConversation(t *testing.T) {
 			option:  WithPresencePenalty(0.5),
 			wantErr: false,
 			validate: func(t *testing.T, opts *ModelOptions) {
-				if opts.PresencePenalty != 0.5 {
-					t.Errorf("Expected PresencePenalty 0.5, got %f", opts.PresencePenalty)
+				if opts.PresencePenalty == nil || *opts.PresencePenalty != 0.5 {
+					if opts.PresencePenalty == nil {
+						t.Errorf("Expected PresencePenalty 0.5, got nil")
+					} else {
+						t.Errorf("Expected PresencePenalty 0.5, got %f", *opts.PresencePenalty)
+					}
 				}
 			},
 		},
@@ -666,28 +726,60 @@ func TestModelOptionChaining(t *testing.T) {
 	}
 
 	// Verify all options were applied
-	if opts.Temperature != 0.7 {
-		t.Errorf("Expected Temperature 0.7, got %f", opts.Temperature)
+	if opts.Temperature == nil || *opts.Temperature != 0.7 {
+		if opts.Temperature == nil {
+			t.Errorf("Expected Temperature 0.7, got nil")
+		} else {
+			t.Errorf("Expected Temperature 0.7, got %f", *opts.Temperature)
+		}
 	}
-	if opts.MaxTokens != 150 {
-		t.Errorf("Expected MaxTokens 150, got %d", opts.MaxTokens)
+	if opts.MaxTokens == nil || *opts.MaxTokens != 150 {
+		if opts.MaxTokens == nil {
+			t.Errorf("Expected MaxTokens 150, got nil")
+		} else {
+			t.Errorf("Expected MaxTokens 150, got %d", *opts.MaxTokens)
+		}
 	}
-	if opts.TopP != 0.9 {
-		t.Errorf("Expected TopP 0.9, got %f", opts.TopP)
+	if opts.TopP == nil || *opts.TopP != 0.9 {
+		if opts.TopP == nil {
+			t.Errorf("Expected TopP 0.9, got nil")
+		} else {
+			t.Errorf("Expected TopP 0.9, got %f", *opts.TopP)
+		}
 	}
-	if opts.N != 2 {
-		t.Errorf("Expected N 2, got %d", opts.N)
+	if opts.N == nil || *opts.N != 2 {
+		if opts.N == nil {
+			t.Errorf("Expected N 2, got nil")
+		} else {
+			t.Errorf("Expected N 2, got %d", *opts.N)
+		}
 	}
-	if opts.FrequencyPenalty != 0.5 {
-		t.Errorf("Expected FrequencyPenalty 0.5, got %f", opts.FrequencyPenalty)
+	if opts.FrequencyPenalty == nil || *opts.FrequencyPenalty != 0.5 {
+		if opts.FrequencyPenalty == nil {
+			t.Errorf("Expected FrequencyPenalty 0.5, got nil")
+		} else {
+			t.Errorf("Expected FrequencyPenalty 0.5, got %f", *opts.FrequencyPenalty)
+		}
 	}
-	if opts.PresencePenalty != -0.5 {
-		t.Errorf("Expected PresencePenalty -0.5, got %f", opts.PresencePenalty)
+	if opts.PresencePenalty == nil || *opts.PresencePenalty != -0.5 {
+		if opts.PresencePenalty == nil {
+			t.Errorf("Expected PresencePenalty -0.5, got nil")
+		} else {
+			t.Errorf("Expected PresencePenalty -0.5, got %f", *opts.PresencePenalty)
+		}
 	}
-	if opts.Seed != 42 {
-		t.Errorf("Expected Seed 42, got %d", opts.Seed)
+	if opts.Seed == nil || *opts.Seed != 42 {
+		if opts.Seed == nil {
+			t.Errorf("Expected Seed 42, got nil")
+		} else {
+			t.Errorf("Expected Seed 42, got %d", *opts.Seed)
+		}
 	}
-	if opts.User != "test-user" {
-		t.Errorf("Expected User 'test-user', got '%s'", opts.User)
+	if opts.User == nil || *opts.User != "test-user" {
+		if opts.User == nil {
+			t.Errorf("Expected User 'test-user', got nil")
+		} else {
+			t.Errorf("Expected User 'test-user', got '%s'", *opts.User)
+		}
 	}
 }

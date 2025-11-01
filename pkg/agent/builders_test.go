@@ -71,8 +71,12 @@ func TestCreateCompletionOptions(t *testing.T) {
 			},
 			wantErr: false,
 			validate: func(t *testing.T, opts *ModelOptions) {
-				if opts.MaxTokens != 100 {
-					t.Errorf("Expected MaxTokens 100, got %d", opts.MaxTokens)
+				if opts.MaxTokens == nil || *opts.MaxTokens != 100 {
+					if opts.MaxTokens == nil {
+						t.Errorf("Expected MaxTokens 100, got nil")
+					} else {
+						t.Errorf("Expected MaxTokens 100, got %d", *opts.MaxTokens)
+					}
 				}
 			},
 		},
@@ -94,8 +98,12 @@ func TestCreateCompletionOptions(t *testing.T) {
 			},
 			wantErr: false,
 			validate: func(t *testing.T, opts *ModelOptions) {
-				if opts.Temperature != 0.7 {
-					t.Errorf("Expected Temperature 0.7, got %f", opts.Temperature)
+				if opts.Temperature == nil || *opts.Temperature != 0.7 {
+					if opts.Temperature == nil {
+						t.Errorf("Expected Temperature 0.7, got nil")
+					} else {
+						t.Errorf("Expected Temperature 0.7, got %f", *opts.Temperature)
+					}
 				}
 			},
 		},
@@ -120,17 +128,33 @@ func TestCreateCompletionOptions(t *testing.T) {
 			},
 			wantErr: false,
 			validate: func(t *testing.T, opts *ModelOptions) {
-				if opts.MaxTokens != 150 {
-					t.Errorf("Expected MaxTokens 150, got %d", opts.MaxTokens)
+				if opts.MaxTokens == nil || *opts.MaxTokens != 150 {
+					if opts.MaxTokens == nil {
+						t.Errorf("Expected MaxTokens 150, got nil")
+					} else {
+						t.Errorf("Expected MaxTokens 150, got %d", *opts.MaxTokens)
+					}
 				}
-				if opts.Temperature != 0.8 {
-					t.Errorf("Expected Temperature 0.8, got %f", opts.Temperature)
+				if opts.Temperature == nil || *opts.Temperature != 0.8 {
+					if opts.Temperature == nil {
+						t.Errorf("Expected Temperature 0.8, got nil")
+					} else {
+						t.Errorf("Expected Temperature 0.8, got %f", *opts.Temperature)
+					}
 				}
-				if opts.TopP != 0.9 {
-					t.Errorf("Expected TopP 0.9, got %f", opts.TopP)
+				if opts.TopP == nil || *opts.TopP != 0.9 {
+					if opts.TopP == nil {
+						t.Errorf("Expected TopP 0.9, got nil")
+					} else {
+						t.Errorf("Expected TopP 0.9, got %f", *opts.TopP)
+					}
 				}
-				if opts.N != 2 {
-					t.Errorf("Expected N 2, got %d", opts.N)
+				if opts.N == nil || *opts.N != 2 {
+					if opts.N == nil {
+						t.Errorf("Expected N 2, got nil")
+					} else {
+						t.Errorf("Expected N 2, got %d", *opts.N)
+					}
 				}
 			},
 		},
@@ -149,7 +173,7 @@ func TestCreateCompletionOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := CreateCompletionOptions(tt.prompt, tt.model, tt.completionOptions...)
+			got, err := CreateCompletionOptions(tt.model, tt.prompt, tt.completionOptions...)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CreateCompletionOptions() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -307,8 +331,12 @@ func TestCreateConversationOptions(t *testing.T) {
 			},
 			wantErr: false,
 			validate: func(t *testing.T, opts *ModelOptions) {
-				if opts.Temperature != 0.7 {
-					t.Errorf("Expected Temperature 0.7, got %f", opts.Temperature)
+				if opts.Temperature == nil || *opts.Temperature != 0.7 {
+					if opts.Temperature == nil {
+						t.Errorf("Expected Temperature 0.7, got nil")
+					} else {
+						t.Errorf("Expected Temperature 0.7, got %f", *opts.Temperature)
+					}
 				}
 			},
 		},
@@ -330,8 +358,12 @@ func TestCreateConversationOptions(t *testing.T) {
 			},
 			wantErr: false,
 			validate: func(t *testing.T, opts *ModelOptions) {
-				if opts.MaxCompletionTokens != 200 {
-					t.Errorf("Expected MaxCompletionTokens 200, got %d", opts.MaxCompletionTokens)
+				if opts.MaxCompletionTokens == nil || *opts.MaxCompletionTokens != 200 {
+					if opts.MaxCompletionTokens == nil {
+						t.Errorf("Expected MaxCompletionTokens 200, got nil")
+					} else {
+						t.Errorf("Expected MaxCompletionTokens 200, got %d", *opts.MaxCompletionTokens)
+					}
 				}
 			},
 		},
@@ -347,17 +379,33 @@ func TestCreateConversationOptions(t *testing.T) {
 			},
 			wantErr: false,
 			validate: func(t *testing.T, opts *ModelOptions) {
-				if opts.Temperature != 0.8 {
-					t.Errorf("Expected Temperature 0.8, got %f", opts.Temperature)
+				if opts.Temperature == nil || *opts.Temperature != 0.8 {
+					if opts.Temperature == nil {
+						t.Errorf("Expected Temperature 0.8, got nil")
+					} else {
+						t.Errorf("Expected Temperature 0.8, got %f", *opts.Temperature)
+					}
 				}
-				if opts.MaxCompletionTokens != 300 {
-					t.Errorf("Expected MaxCompletionTokens 300, got %d", opts.MaxCompletionTokens)
+				if opts.MaxCompletionTokens == nil || *opts.MaxCompletionTokens != 300 {
+					if opts.MaxCompletionTokens == nil {
+						t.Errorf("Expected MaxCompletionTokens 300, got nil")
+					} else {
+						t.Errorf("Expected MaxCompletionTokens 300, got %d", *opts.MaxCompletionTokens)
+					}
 				}
-				if opts.PresencePenalty != 0.5 {
-					t.Errorf("Expected PresencePenalty 0.5, got %f", opts.PresencePenalty)
+				if opts.PresencePenalty == nil || *opts.PresencePenalty != 0.5 {
+					if opts.PresencePenalty == nil {
+						t.Errorf("Expected PresencePenalty 0.5, got nil")
+					} else {
+						t.Errorf("Expected PresencePenalty 0.5, got %f", *opts.PresencePenalty)
+					}
 				}
-				if opts.FrequencyPenalty != -0.5 {
-					t.Errorf("Expected FrequencyPenalty -0.5, got %f", opts.FrequencyPenalty)
+				if opts.FrequencyPenalty == nil || *opts.FrequencyPenalty != -0.5 {
+					if opts.FrequencyPenalty == nil {
+						t.Errorf("Expected FrequencyPenalty -0.5, got nil")
+					} else {
+						t.Errorf("Expected FrequencyPenalty -0.5, got %f", *opts.FrequencyPenalty)
+					}
 				}
 			},
 		},

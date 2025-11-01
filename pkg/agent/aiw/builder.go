@@ -4,10 +4,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 
-	a "github.com/morphy76/ggraph/pkg/agent"
 	o "github.com/morphy76/ggraph/pkg/agent/openai"
-	b "github.com/morphy76/ggraph/pkg/builders"
-	g "github.com/morphy76/ggraph/pkg/graph"
 )
 
 // NewAIWClient creates a new OpenAI client configured for the AIW platform.
@@ -27,60 +24,4 @@ func NewAIWClient(
 	opts ...option.RequestOption,
 ) *openai.Client {
 	return o.NewClient(AIWBaseURL, PAT, opts...)
-}
-
-// CreateCompletionNode creates a graph node for an AIW-based chat agent.
-//
-// Parameters:
-//   - name: The unique name for the node.
-//   - model: The OpenAI model to be used for the chat agent.
-//   - client: The OpenAI client instance.
-//   - completionNodeFn: A function that creates the node function for the AIW chat agent.
-//   - completionOptions: Additional completion options for the OpenAI API calls.
-//
-// Returns:
-//   - An instance of g.Node[a.Conversation] configured for the OpenAI chat agent.
-//   - An error if the node creation fails.
-//
-// Example usage:
-//
-//	node, err := CreateCompletionNode("ChatNode", "velvet-2b", client, myOpenAINodeFn)
-func CreateCompletionNode(
-	name, model string,
-	client *openai.Client,
-	completionNodeFn o.CompletionNodeFn,
-	completionOptions ...a.ModelOption,
-) (g.Node[a.Completion], error) {
-	openAIFn := completionNodeFn(client.Completions, model, completionOptions...)
-
-	rv, err := b.NewNodeBuilder(name, openAIFn).Build()
-	return rv, err
-}
-
-// CreateConversationNode creates a graph node for an AIW-based chat agent.
-//
-// Parameters:
-//   - name: The unique name for the node.
-//   - model: The OpenAI model to be used for the chat agent.
-//   - client: The OpenAI client instance.
-//   - conversationNodeFn: A function that creates the node function for the AIW chat agent.
-//   - conversationOptions: Additional conversation options for the OpenAI API calls.
-//
-// Returns:
-//   - An instance of g.Node[a.Conversation] configured for the OpenAI chat agent.
-//   - An error if the node creation fails.
-//
-// Example usage:
-//
-//	node, err := CreateConversationNode("ChatNode", "gpt4o-mini", client, myOpenAINodeFn)
-func CreateConversationNode(
-	name, model string,
-	client *openai.Client,
-	conversationNodeFn o.ConversationNodeFn,
-	conversationOptions ...a.ModelOption,
-) (g.Node[a.Conversation], error) {
-	openAIFn := conversationNodeFn(client.Chat, model, conversationOptions...)
-
-	rv, err := b.NewNodeBuilder(name, openAIFn).Build()
-	return rv, err
 }

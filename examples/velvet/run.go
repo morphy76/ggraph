@@ -451,7 +451,7 @@ func main() {
 	client := aiw.NewAIWClient(pat)
 
 	// Create the three nodes with different Velvet models
-	teacherNode, err := aiw.CreateConversationNode(
+	teacherNode, err := o.CreateConversationNode(
 		"TeacherNode",
 		"velvet-2b",
 		client,
@@ -463,7 +463,7 @@ func main() {
 		log.Fatalf("Failed to create teacher node: %v", err)
 	}
 
-	studentNode, err := aiw.CreateConversationNode(
+	studentNode, err := o.CreateConversationNode(
 		"StudentNode",
 		"velvet-25b-07-15771",
 		client,
@@ -473,7 +473,7 @@ func main() {
 		log.Fatalf("Failed to create student node: %v", err)
 	}
 
-	evaluatorNode, err := aiw.CreateConversationNode(
+	evaluatorNode, err := o.CreateConversationNode(
 		"EvaluatorNode",
 		"velvet-14b",
 		client,

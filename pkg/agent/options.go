@@ -13,53 +13,53 @@ type ModelOptions struct {
 	//
 	// When used with `n`, `best_of` controls the number of candidate completions and
 	// `n` specifies how many to return – `best_of` must be greater than `n`.
-	BestOf int64
+	BestOf *int64
 	// Echo back the prompt in addition to the completion
-	Echo bool
+	Echo *bool
 	// Number between -2.0 and 2.0. Positive values penalize new tokens based on their
 	// existing frequency in the text so far, decreasing the model's likelihood to
 	// repeat the same line verbatim.
-	FrequencyPenalty float64
+	FrequencyPenalty *float64
 	// Include the log probabilities on the `logprobs` most likely output tokens, as
 	// well the chosen tokens. For example, if `logprobs` is 5, the API will return a
 	// list of the 5 most likely tokens. The API will always return the `logprob` of
 	// the sampled token, so there may be up to `logprobs+1` elements in the response.
 	//
 	// The maximum value for `logprobs` is 5.
-	Logprobs int64
+	Logprobs *int64
 	// The maximum number of [tokens](/tokenizer) that can be used for the
 	// completion portion of the conversation.
-	MaxCompletionTokens int64
+	MaxCompletionTokens *int64
 	// The maximum number of [tokens](/tokenizer) that can be generated in the
 	// completion.
-	MaxTokens int64
+	MaxTokens *int64
 	// How many completions to generate for each prompt.
-	N int64
+	N *int64
 	// Number between -2.0 and 2.0. Positive values penalize new tokens based on
 	// whether they appear in the text so far, increasing the model's likelihood to
 	// talk about new topics.
-	PresencePenalty float64
+	PresencePenalty *float64
 	// If specified, our system will make a best effort to sample deterministically,
 	// such that repeated requests with the same `seed` and parameters should return
 	// the same result.
 	//
 	// Determinism is not guaranteed, and you should refer to the `system_fingerprint`
 	// response parameter to monitor changes in the backend.
-	Seed int64
+	Seed *int64
 	// What sampling temperature to use, between 0 and 2. Higher values like 0.8 will
 	// make the output more random, while lower values like 0.2 will make it more
 	// focused and deterministic.
 	//
 	// We generally recommend altering this or `top_p` but not both.
-	Temperature float64
+	Temperature *float64
 	// An alternative to sampling with temperature, called nucleus sampling, where the
 	// model considers the results of the tokens with top_p probability mass. So 0.1
 	// means only the tokens comprising the top 10% probability mass are considered.
 	//
 	// We generally recommend altering this or `temperature` but not both.
-	TopP float64
+	TopP *float64
 	// A unique identifier representing your end-user.
-	User string
+	User *string
 }
 
 // ModelOption defines an interface for applying options to completion requests.
@@ -119,7 +119,7 @@ func WithBestOf(bestOf int64) ModelOption {
 		if bestOf < 1 {
 			return ErrorInvalidBestOf
 		}
-		r.BestOf = bestOf
+		r.BestOf = &bestOf
 		return nil
 	})
 }
@@ -137,7 +137,7 @@ func WithBestOf(bestOf int64) ModelOption {
 //	option := WithEcho(true)
 func WithEcho(echo bool) ModelOption {
 	return ModelOptionFunc(func(r *ModelOptions) error {
-		r.Echo = echo
+		r.Echo = &echo
 		return nil
 	})
 }
@@ -158,7 +158,7 @@ func WithFrequencyPenalty(frequencyPenalty float64) ModelOption {
 		if frequencyPenalty < -2.0 || frequencyPenalty > 2.0 {
 			return ErrorInvalidFrequencyPenalty
 		}
-		r.FrequencyPenalty = frequencyPenalty
+		r.FrequencyPenalty = &frequencyPenalty
 		return nil
 	})
 }
@@ -179,7 +179,7 @@ func WithLogprobs(logprobs int64) ModelOption {
 		if logprobs < 0 || logprobs > 5 {
 			return ErrorInvalidLogprobs
 		}
-		r.Logprobs = logprobs
+		r.Logprobs = &logprobs
 		return nil
 	})
 }
@@ -200,7 +200,7 @@ func WithMaxTokens(maxTokens int64) ModelOption {
 		if maxTokens < 1 {
 			return ErrorInvalidMaxTokens
 		}
-		r.MaxTokens = maxTokens
+		r.MaxTokens = &maxTokens
 		return nil
 	})
 }
@@ -221,7 +221,7 @@ func WithN(n int64) ModelOption {
 		if n < 1 {
 			return ErrorInvalidN
 		}
-		r.N = n
+		r.N = &n
 		return nil
 	})
 }
@@ -242,7 +242,7 @@ func WithPresencePenalty(presencePenalty float64) ModelOption {
 		if presencePenalty < -2.0 || presencePenalty > 2.0 {
 			return ErrorInvalidPresencePenalty
 		}
-		r.PresencePenalty = presencePenalty
+		r.PresencePenalty = &presencePenalty
 		return nil
 	})
 }
@@ -260,7 +260,7 @@ func WithPresencePenalty(presencePenalty float64) ModelOption {
 //	option := WithSeed(42)
 func WithSeed(seed int64) ModelOption {
 	return ModelOptionFunc(func(r *ModelOptions) error {
-		r.Seed = seed
+		r.Seed = &seed
 		return nil
 	})
 }
@@ -281,7 +281,7 @@ func WithTemperature(temperature float64) ModelOption {
 		if temperature < 0.0 || temperature > 2.0 {
 			return ErrorInvalidTemperature
 		}
-		r.Temperature = temperature
+		r.Temperature = &temperature
 		return nil
 	})
 }
@@ -302,7 +302,7 @@ func WithTopP(topP float64) ModelOption {
 		if topP < 0.0 || topP > 1.0 {
 			return ErrorInvalidTopP
 		}
-		r.TopP = topP
+		r.TopP = &topP
 		return nil
 	})
 }
@@ -320,7 +320,7 @@ func WithTopP(topP float64) ModelOption {
 //	option := WithUser("user-1234")
 func WithUser(user string) ModelOption {
 	return ModelOptionFunc(func(r *ModelOptions) error {
-		r.User = user
+		r.User = &user
 		return nil
 	})
 }
@@ -341,7 +341,7 @@ func WithMaxCompletionTokens(maxCompletionTokens int64) ModelOption {
 		if maxCompletionTokens < 1 {
 			return ErrorInvalidMaxTokens
 		}
-		r.MaxCompletionTokens = maxCompletionTokens
+		r.MaxCompletionTokens = &maxCompletionTokens
 		return nil
 	})
 }

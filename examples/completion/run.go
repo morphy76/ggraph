@@ -11,7 +11,6 @@ import (
 	"github.com/openai/openai-go/v3"
 
 	a "github.com/morphy76/ggraph/pkg/agent"
-	"github.com/morphy76/ggraph/pkg/agent/aiw"
 	o "github.com/morphy76/ggraph/pkg/agent/openai"
 	b "github.com/morphy76/ggraph/pkg/builders"
 	g "github.com/morphy76/ggraph/pkg/graph"
@@ -63,17 +62,17 @@ func main() {
 	fmt.Println()
 
 	// Get the API key from environment variable
-	apiKey := aiw.PATFromEnv()
+	apiKey := o.APIKeyFromEnv()
 	if apiKey == "" {
 		log.Fatal("Environment variable not set to fetch the API key.")
 	}
 
-	client := aiw.NewAIWClient(apiKey)
+	client := o.NewOpenAIClient(apiKey)
 
 	// Create the completion node
-	completionNode, err := aiw.CreateCompletionNode(
+	completionNode, err := o.CreateCompletionNode(
 		"CompletionNode",
-		"velvet-2b",
+		openai.ChatModelGPT4_1Nano,
 		client,
 		CompletionNodeFn,
 		a.WithTemperature(0.7),

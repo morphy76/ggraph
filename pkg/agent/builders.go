@@ -32,7 +32,7 @@ func CreateCompletion(text string) Completion {
 //
 //	options, err := CreateCompletionOptions("Hello, world!", "gpt-4", WithMaxTokens(100))
 func CreateCompletionOptions(
-	prompt, model string,
+	model, prompt string,
 	completionOptions ...ModelOption,
 ) (*ModelOptions, error) {
 	useOptions := ModelOptions{
