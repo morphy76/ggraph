@@ -112,7 +112,8 @@ func CreateConversationOptions(
 	modelOptions ...ModelOption,
 ) (*ModelOptions, error) {
 	useOptions := ModelOptions{
-		Model: promptModel,
+		Model:    promptModel,
+		Messages: messages,
 	}
 	for _, opt := range modelOptions {
 		if err := opt.ApplyToConversation(&useOptions); err != nil {

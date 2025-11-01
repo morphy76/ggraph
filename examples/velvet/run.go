@@ -448,16 +448,15 @@ func main() {
 		log.Fatal("AIW_API_KEY environment variable not set; visit https://portal.aiwave.ai to get your API key.")
 	}
 
-	client := aiw.NewAIWClient(pat)
+	aiwClient := aiw.NewAIWClient(pat)
 
 	// Create the three nodes with different Velvet models
 	teacherNode, err := o.CreateConversationNode(
 		"TeacherNode",
-		"velvet-2b",
-		client,
+		"velvet-2b-1.5-02-34260",
+		aiwClient,
 		TeacherNodeFn,
-		a.WithMaxTokens(200),
-		a.WithMaxCompletionTokens(200),
+		a.WithTemperature(1.0),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create teacher node: %v", err)
@@ -466,8 +465,9 @@ func main() {
 	studentNode, err := o.CreateConversationNode(
 		"StudentNode",
 		"velvet-25b-07-15771",
-		client,
+		aiwClient,
 		StudentNodeFn,
+		a.WithTemperature(0.5),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create student node: %v", err)
@@ -476,8 +476,9 @@ func main() {
 	evaluatorNode, err := o.CreateConversationNode(
 		"EvaluatorNode",
 		"velvet-14b",
-		client,
+		aiwClient,
 		EvaluatorNodeFn,
+		a.WithTemperature(0.0),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create evaluator node: %v", err)
