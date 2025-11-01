@@ -75,7 +75,7 @@ func CreateCompletionNode(
 	name, model string,
 	client *openai.Client,
 	completionNodeFn CompletionNodeFn,
-	completionOptions ...a.CompletionOption,
+	completionOptions ...a.ModelOption,
 ) (g.Node[a.Completion], error) {
 	openAIFn := completionNodeFn(client.Completions, model, completionOptions...)
 
@@ -87,10 +87,10 @@ func CreateCompletionNode(
 //
 // Parameters:
 //   - name: The unique name for the node.
-//   - apiKey: The API key for authentication.
 //   - model: The OpenAI model to be used for the chat agent.
+//   - client: The OpenAI client instance.
 //   - conversationNodeFn: A function that creates the node function for the OpenAI chat agent.
-//   - opts: Additional request options for the OpenAI API calls.
+//   - conversationOptions: Additional conversation options for the OpenAI API calls.
 //
 // Returns:
 //   - An instance of g.Node[a.Conversation] configured for the OpenAI chat agent.
@@ -100,12 +100,12 @@ func CreateCompletionNode(
 //
 //	node, err := CreateConversationNode("ChatNode",  "your-api-key", "gpt-4", myOpenAINodeFn)
 func CreateConversationNode(
-	name, apiKey, model string,
+	name, model string,
+	client *openai.Client,
 	conversationNodeFn ConversationNodeFn,
-	opts ...option.RequestOption,
+	conversationOptions ...a.ModelOption,
 ) (g.Node[a.Conversation], error) {
-	client := NewClient(OpenAIBaseURL, apiKey, opts...)
-	openAIFn := conversationNodeFn(client.Chat, model, opts...)
+	openAIFn := conversationNodeFn(client.Chat, model, conversationOptions...)
 
 	rv, err := b.NewNodeBuilder(name, openAIFn).Build()
 	return rv, err

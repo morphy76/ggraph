@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/option"
 
 	a "github.com/morphy76/ggraph/pkg/agent"
 	aiw "github.com/morphy76/ggraph/pkg/agent/aiw"
@@ -45,22 +44,22 @@ type ThreadResult struct {
 }
 
 // TeacherNodeFn creates a conversational node for a high school teacher generating questions
-var TeacherNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, model string, opts ...option.RequestOption) g.NodeFn[a.Conversation] {
+var TeacherNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, model string, conversationOptions ...a.ModelOption) g.NodeFn[a.Conversation] {
 	return func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) (a.Conversation, error) {
 		// System instruction for the teacher
 		systemMsg := a.CreateMessage(a.System, "Sei un insegnante di scuola superiore. "+
 			"Genera una domanda casuale su cultura generale, matematica, fisica, letteratura, scienze, storia, in generale su argomenti scolastici ma non di attualità. "+
 			"Fai la domanda, con una brevissima introduzione o spiegazione. Parla solo in italiano.")
 
-		messages := []openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(systemMsg.Content),
-			openai.UserMessage("Genera una domanda casuale."),
-		}
+		useOpts, err := a.CreateConversationOptions(
+			model,
+			[]a.Message{systemMsg, a.CreateMessage(a.User, "Genera una domanda")},
+			conversationOptions...,
+		)
 
-		resp, err := chatService.Completions.New(context.Background(), openai.ChatCompletionNewParams{
-			Model:    openai.ChatModel(model),
-			Messages: messages,
-		})
+		openAIOpts := o.ConvertConversationOptions(useOpts)
+
+		resp, err := chatService.Completions.New(context.Background(), openAIOpts)
 		if err != nil {
 			return currentState, fmt.Errorf("failed to generate question: %w", err)
 		}
@@ -75,7 +74,7 @@ var TeacherNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, mo
 }
 
 // StudentNodeFn creates a conversational node for a student answering questions
-var StudentNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, model string, opts ...option.RequestOption) g.NodeFn[a.Conversation] {
+var StudentNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, model string, conversationOptions ...a.ModelOption) g.NodeFn[a.Conversation] {
 	return func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) (a.Conversation, error) {
 		// Get the last message (the question from the teacher)
 		if len(currentState.Messages) == 0 {
@@ -90,15 +89,15 @@ var StudentNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, mo
 			"Rispondi alla domanda che ti viene posta nel modo più completo e preciso possibile. "+
 			"Parla solo in italiano.")
 
-		messages := []openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(systemMsg.Content),
-			openai.UserMessage(question),
-		}
+		useOpts, err := a.CreateConversationOptions(
+			model,
+			[]a.Message{systemMsg, a.CreateMessage(a.User, question)},
+			conversationOptions...,
+		)
 
-		resp, err := chatService.Completions.New(context.Background(), openai.ChatCompletionNewParams{
-			Model:    openai.ChatModel(model),
-			Messages: messages,
-		})
+		openAIOpts := o.ConvertConversationOptions(useOpts)
+
+		resp, err := chatService.Completions.New(context.Background(), openAIOpts)
 		if err != nil {
 			return currentState, fmt.Errorf("failed to generate answer: %w", err)
 		}
@@ -113,7 +112,7 @@ var StudentNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, mo
 }
 
 // EvaluatorNodeFn creates a conversational node for an expert linguist evaluating answers
-var EvaluatorNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, model string, opts ...option.RequestOption) g.NodeFn[a.Conversation] {
+var EvaluatorNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, model string, conversationOptions ...a.ModelOption) g.NodeFn[a.Conversation] {
 	return func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) (a.Conversation, error) {
 		// Get the question and answer
 		if len(currentState.Messages) < 2 {
@@ -133,15 +132,15 @@ var EvaluatorNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, 
 
 		prompt := fmt.Sprintf("Domanda: %s\n\nRisposta: %s\n\nValuta la risposta.", question, answer)
 
-		messages := []openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(systemMsg.Content),
-			openai.UserMessage(prompt),
-		}
+		useOpts, err := a.CreateConversationOptions(
+			model,
+			[]a.Message{systemMsg, a.CreateMessage(a.User, prompt)},
+			conversationOptions...,
+		)
 
-		resp, err := chatService.Completions.New(context.Background(), openai.ChatCompletionNewParams{
-			Model:    openai.ChatModel(model),
-			Messages: messages,
-		})
+		openAIOpts := o.ConvertConversationOptions(useOpts)
+
+		resp, err := chatService.Completions.New(context.Background(), openAIOpts)
 		if err != nil {
 			return currentState, fmt.Errorf("failed to generate evaluation: %w", err)
 		}
@@ -449,12 +448,16 @@ func main() {
 		log.Fatal("AIW_API_KEY environment variable not set; visit https://portal.aiwave.ai to get your API key.")
 	}
 
+	client := aiw.NewAIWClient(pat)
+
 	// Create the three nodes with different Velvet models
 	teacherNode, err := aiw.CreateConversationNode(
 		"TeacherNode",
-		pat,
 		"velvet-2b",
+		client,
 		TeacherNodeFn,
+		a.WithMaxTokens(200),
+		a.WithMaxCompletionTokens(200),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create teacher node: %v", err)
@@ -462,8 +465,8 @@ func main() {
 
 	studentNode, err := aiw.CreateConversationNode(
 		"StudentNode",
-		pat,
 		"velvet-25b-07-15771",
+		client,
 		StudentNodeFn,
 	)
 	if err != nil {
@@ -472,8 +475,8 @@ func main() {
 
 	evaluatorNode, err := aiw.CreateConversationNode(
 		"EvaluatorNode",
-		pat,
 		"velvet-14b",
+		client,
 		EvaluatorNodeFn,
 	)
 	if err != nil {

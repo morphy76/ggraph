@@ -18,12 +18,12 @@ import (
 )
 
 // CompletionNodeFn creates a completion node that generates text based on a prompt using chat completions
-var CompletionNodeFn o.CompletionNodeFn = func(completionService openai.CompletionService, model string, opts ...a.CompletionOption) g.NodeFn[a.Completion] {
+var CompletionNodeFn o.CompletionNodeFn = func(completionService openai.CompletionService, model string, completionOptions ...a.ModelOption) g.NodeFn[a.Completion] {
 	return func(userInput, currentState a.Completion, notify g.NotifyPartialFn[a.Completion]) (a.Completion, error) {
 		// Check if there's a user prompt in the conversation, or use a default
 		prompt := "Use the family guy style: answer in the same way Peter Griffin would. The request is within boundaries defined by !!![ and ]!!!. Do not put boundaries in the final answer. Requested completion is:\n!!![\n%s\n]!!!"
 
-		useOpts, err := a.CreateCompletionOptions(model, fmt.Sprintf(prompt, userInput.Text), opts...)
+		useOpts, err := a.CreateCompletionOptions(model, fmt.Sprintf(prompt, userInput.Text), completionOptions...)
 		if err != nil {
 			return currentState, fmt.Errorf("failed to create completion options: %w", err)
 		}
