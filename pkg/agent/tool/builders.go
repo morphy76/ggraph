@@ -2,8 +2,25 @@ package tool
 
 import (
 	"reflect"
+	"runtime"
+	"strconv"
 	"strings"
 )
+
+// ExecFn represents a generic function type that can be used as a tool.
+//
+// An ExecFn has the signature: func(args...) (T, error)
+//
+// Type parameters:
+//   - T: The return type of the function as specified in the tool creation.
+//
+// Parameters:
+//   - args: A variable number of arguments of any type.
+//
+// Returns:
+//   - T: The result of the function execution.
+//   - error: An error if the function fails during execution.
+type ExecFn any
 
 // CreateTool creates a new Tool instance from the provided function and descriptors.
 //
@@ -22,19 +39,22 @@ import (
 //   - descriptors: A variable number of strings describing the tool's purpose and usage in the format "role:description".
 //
 // Returns:
-//   - *Tool[T]: A pointer to the created Tool instance.
+//   - *Tool: A pointer to the created Tool instance.
 //   - error: An error if the function is not valid or descriptors are incorrectly formatted.
 //
 // Example:
 //
 //	myTool, err := tool.CreateTool[string](myFunc, "Prompt: This tool does X", "Usage: Call with Y")
-func CreateTool[T any](fn any, descriptors ...string) (*Tool[T], error) {
+func CreateTool[T any](fn ExecFn, descriptors ...string) (*Tool, error) {
+	// TODO fn is a builder which accepts builder args (pooled http clients, dbconnections,...) and returns a ExecFn
+
 	fnType := reflect.TypeOf(fn)
 	fnValue := reflect.ValueOf(fn)
 
 	if fnType.Kind() != reflect.Func {
 		return nil, ErrToolFnNotFunction
 	}
+
 	if fnType.NumOut() != 2 {
 		return nil, ErrToolFnInvalidReturnCount
 	}
@@ -44,6 +64,15 @@ func CreateTool[T any](fn any, descriptors ...string) (*Tool[T], error) {
 
 	toolFn := callable{fn: fnValue, in: fnType.NumIn()}
 
+	args := make([]Arg, fnType.NumIn())
+	for i := 0; i < fnType.NumIn(); i++ {
+		argType := fnType.In(i)
+		args[i] = Arg{
+			Name: "arg" + strconv.Itoa(i+1),
+			Type: argType.String(),
+		}
+	}
+
 	toolDesc := make(map[string]string, len(descriptors))
 	for _, desc := range descriptors {
 		parts := strings.Split(desc, ":")
@@ -52,15 +81,51 @@ func CreateTool[T any](fn any, descriptors ...string) (*Tool[T], error) {
 			return nil, ErrInvalidDescriptorFormat
 		}
 
-		role := strings.TrimSpace(parts[0])
+		role := strings.ToLower(strings.TrimSpace(parts[0]))
 		description := strings.TrimSpace(parts[1])
 
 		toolDesc[role] = description
 	}
 
-	return &Tool[T]{
-		name:         fnType.Name(),
+	var t T
+	toolName := extractToolName(fn, reflect.TypeOf(t))
+
+	return &Tool{
+		Name:         toolName,
+		Args:         args,
 		descriptions: toolDesc,
 		callable:     toolFn,
 	}, nil
+}
+
+func extractToolName(fn any, genericType reflect.Type) string {
+	fnValue := reflect.ValueOf(fn)
+
+	fullName := runtime.FuncForPC(fnValue.Pointer()).Name()
+
+	lastSlash := strings.LastIndex(fullName, "/")
+	if lastSlash != -1 {
+		fullName = fullName[lastSlash+1:]
+	}
+
+	baseName := fullName
+	if dotIdx := strings.Index(fullName, "."); dotIdx != -1 {
+		baseName = fullName[dotIdx+1:]
+	}
+
+	isGeneric := strings.HasSuffix(baseName, "[...]")
+
+	if isGeneric {
+		baseName = strings.TrimSuffix(baseName, "[...]")
+
+		if genericType != nil {
+			typeName := genericType.String()
+			if idx := strings.LastIndex(typeName, "."); idx != -1 {
+				typeName = typeName[idx+1:]
+			}
+			return baseName + "_" + typeName
+		}
+	}
+
+	return baseName
 }

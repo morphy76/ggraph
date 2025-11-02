@@ -14,6 +14,8 @@ const (
 	User
 	// Assistant represents an assistant message.
 	Assistant
+	// Tool represents a tool message.
+	Tool
 )
 
 // Message represents a single message in a chat conversation.

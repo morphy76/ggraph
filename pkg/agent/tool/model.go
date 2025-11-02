@@ -21,13 +21,22 @@ type callable struct {
 	in int
 }
 
+// Arg represents a single argument for a Tool.
+type Arg struct {
+	// Name is the name of the argument.
+	Name string
+	// Type is the type of the argument.
+	Type string
+}
+
 // Tool represents a callable tool with metadata.
 //
-// T is the return type of the tool function along with an error.
-//
 // The tool function must have the signature: func(args...) (T, error)
-type Tool[T any] struct {
-	name         string
+type Tool struct {
+	// Name is the name of the tool.
+	Name string
+	// Args is the list of arguments for the tool.
+	Args         []Arg
 	descriptions map[string]string
 	callable     callable
 }
@@ -47,9 +56,9 @@ type Tool[T any] struct {
 // Example:
 //
 //	result, err := myTool.Call(arg1, arg2)
-func (t Tool[T]) Call(args ...any) (T, error) {
+func (t Tool) Call(args ...any) (any, error) {
 	if len(args) != t.callable.in {
-		return *new(T), ErrCallingToolInvalidArgsCount
+		return nil, ErrCallingToolInvalidArgsCount
 	}
 
 	in := make([]reflect.Value, len(args))
@@ -60,8 +69,32 @@ func (t Tool[T]) Call(args ...any) (T, error) {
 	rvs := t.callable.fn.Call(in)
 
 	if rvs[1].IsNil() {
-		return rvs[0].Interface().(T), nil
+		return rvs[0].Interface().(any), nil
 	} else {
-		return *new(T), rvs[1].Interface().(error)
+		return nil, rvs[1].Interface().(error)
 	}
+}
+
+// Description returns the tool's description.
+//
+// It looks for common description roles in the following order:
+//   - "prompt"
+//   - "description"
+//   - "usage"
+//
+// If none of these roles are found, it returns an empty string.
+//
+// Returns:
+//   - string: The tool's description.
+func (t Tool) Description() string {
+	return t.descriptionForRoles("prompt", "description", "usage")
+}
+
+func (t Tool) descriptionForRoles(role ...string) string {
+	for _, r := range role {
+		if desc, ok := t.descriptions[r]; ok {
+			return desc
+		}
+	}
+	return ""
 }

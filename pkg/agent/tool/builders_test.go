@@ -27,31 +27,64 @@ func alwaysFail(s ...any) (any, error) {
 	return nil, fmt.Errorf("always fail on purpose")
 }
 
+func quote() (string, error) {
+	return "\"To be, or not to be, that is the question.\"\n- William Shakespeare", nil
+}
+
 func TestTools(t *testing.T) {
 
 	firstTool, err := tool.CreateTool[int](addition[int], "Prompt: Add two numbers together.", "Input: (a int, b int)", "Output: int")
 	if err != nil {
 		t.Fatalf("Failed to create firstTool: %v", err)
 	}
+	// Assert: generic function name should be "addition_int"
+	if firstTool.Name != "addition_int" {
+		t.Errorf("firstTool.Name = %q; want %q", firstTool.Name, "addition_int")
+	}
 
 	secondTool, err := tool.CreateTool[float64](addition[float64], "Prompt: Add two float64 numbers together.", "Input: (a float64, b float64)", "Output: float64")
 	if err != nil {
 		t.Fatalf("Failed to create secondTool: %v", err)
+	}
+	// Assert: generic function name should be "addition_float64"
+	if secondTool.Name != "addition_float64" {
+		t.Errorf("secondTool.Name = %q; want %q", secondTool.Name, "addition_float64")
 	}
 
 	thirdTool, err := tool.CreateTool[string](concat, "Prompt: Concatenate two strings.", "Input: (a string, b string)", "Output: string")
 	if err != nil {
 		t.Fatalf("Failed to create thirdTool: %v", err)
 	}
+	// Assert: non-generic function name should be "concat"
+	if thirdTool.Name != "concat" {
+		t.Errorf("thirdTool.Name = %q; want %q", thirdTool.Name, "concat")
+	}
 
 	fourthTool, err := tool.CreateTool[string](reverse, "Prompt: Reverse a string.", "Input: (s string)", "Output: string")
 	if err != nil {
 		t.Fatalf("Failed to create fourthTool: %v", err)
 	}
+	// Assert: non-generic function name should be "reverse"
+	if fourthTool.Name != "reverse" {
+		t.Errorf("fourthTool.Name = %q; want %q", fourthTool.Name, "reverse")
+	}
 
 	fifthTool, err := tool.CreateTool[any](alwaysFail, "Prompt: Always fail.", "Input: (...any)", "Output: (any, error)")
 	if err != nil {
 		t.Fatalf("Failed to create fifthTool: %v", err)
+	}
+	// Assert: non-generic function name should be "alwaysFail"
+	if fifthTool.Name != "alwaysFail" {
+		t.Errorf("fifthTool.Name = %q; want %q", fifthTool.Name, "alwaysFail")
+	}
+
+	sixthTool, err := tool.CreateTool[string](quote, "Prompt: Return a famous quote.", "Input: ()", "Output: string")
+	if err != nil {
+		t.Fatalf("Failed to create sixthTool: %v", err)
+	}
+	// Assert: non-generic function name should be "quote"
+	if sixthTool.Name != "quote" {
+		t.Errorf("sixthTool.Name = %q; want %q", sixthTool.Name, "quote")
 	}
 
 	t.Run("exec_first_tool", func(t *testing.T) {
@@ -122,6 +155,52 @@ func TestTools(t *testing.T) {
 		}
 		if err != tool.ErrCallingToolInvalidArgsCount {
 			t.Errorf("Expected ErrCallingToolInvalidArgsCount, got: %v", err)
+		}
+	})
+
+	t.Run("exec_sixth_tool", func(t *testing.T) {
+		result, err := sixthTool.Call()
+		if err != nil {
+			t.Errorf("sixthTool.Call returned an error: %v", err)
+		}
+		expected := "\"To be, or not to be, that is the question.\"\n- William Shakespeare"
+		if result != expected {
+			t.Errorf("sixthTool.Call = %v; want %v", result, expected)
+		}
+	})
+}
+
+func TestToolNaming(t *testing.T) {
+	t.Run("non_generic_function_name", func(t *testing.T) {
+		// Non-generic functions should use the function name directly
+		tool, err := tool.CreateTool[string](concat, "Prompt: Test")
+		if err != nil {
+			t.Fatalf("Failed to create tool: %v", err)
+		}
+		if tool.Name != "concat" {
+			t.Errorf("Tool name = %q; want %q", tool.Name, "concat")
+		}
+	})
+
+	t.Run("generic_function_with_int_suffix", func(t *testing.T) {
+		// Generic functions should have type suffix separated by underscore
+		tool, err := tool.CreateTool[int](addition[int], "Prompt: Test")
+		if err != nil {
+			t.Fatalf("Failed to create tool: %v", err)
+		}
+		if tool.Name != "addition_int" {
+			t.Errorf("Tool name = %q; want %q", tool.Name, "addition_int")
+		}
+	})
+
+	t.Run("generic_function_with_float64_suffix", func(t *testing.T) {
+		// Generic functions should have type suffix separated by underscore
+		tool, err := tool.CreateTool[float64](addition[float64], "Prompt: Test")
+		if err != nil {
+			t.Fatalf("Failed to create tool: %v", err)
+		}
+		if tool.Name != "addition_float64" {
+			t.Errorf("Tool name = %q; want %q", tool.Name, "addition_float64")
 		}
 	})
 }

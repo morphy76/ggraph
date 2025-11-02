@@ -73,7 +73,7 @@ clean-test: ## Clean test artifacts (coverage files, etc.)
 	@echo "✅ Test artifacts cleaned"
 
 ##@ Graph Examples
-.PHONY: run-conditional-ex run-thread-ex run-helloworld-ex run-loop-ex run-persistence-ex run-velvet-ex run-completion-ex run-all-ex
+.PHONY: run-conditional-ex run-thread-ex run-helloworld-ex run-loop-ex run-persistence-ex run-velvet-ex run-completion-ex run-tool-ex run-all-ex
 run-conditional-ex: ## Run the conditional graph example
 	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/conditional/run.go
 run-thread-ex: ## Run the threading graph example
@@ -90,5 +90,7 @@ run-velvet-ex: ## Run the Velvet AIW educational Q&A example
 	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/velvet/run.go
 run-completion-ex: ## Run the AIW completion agent example
 	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/completion/run.go
-run-all-ex: run-conditional-ex run-thread-ex run-helloworld-ex run-loop-ex run-interrupt-ex run-persistence-ex run-velvet-ex run-completion-ex ## Run all graph examples
+run-tool-ex: ## Run the AIW tool agent example
+	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/tool/run.go
+run-all-ex: run-conditional-ex run-thread-ex run-helloworld-ex run-loop-ex run-interrupt-ex run-persistence-ex run-velvet-ex run-completion-ex run-tool-ex## Run all graph examples
 	@echo "✅ All examples executed"
