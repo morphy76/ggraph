@@ -35,6 +35,34 @@ test: lint ## Run all tests with race detection and comprehensive flags
 test-bench: ## Run benchmark tests
 	@$(GO) test -v -bench=. -benchmem -timeout=60s $(PACKAGES)
 
+##@ Documentation
+.PHONY: doc doc-serve doc-install
+doc: ## Generate static documentation in Go standards format
+	@echo "Generating Go documentation..."
+	@for pkg in $(PACKAGES); do \
+		echo ""; \
+		echo "=== Package: $$pkg ==="; \
+		$(GO) doc -all $$pkg || true; \
+	done
+	@echo ""
+	@echo "✅ Documentation generated"
+	@echo "To browse documentation interactively, run: make doc-serve"
+
+doc-serve: ## Serve documentation locally using pkgsite (install with: make doc-install)
+	@if ! command -v pkgsite > /dev/null 2>&1; then \
+		echo "❌ pkgsite is not installed. Run 'make doc-install' to install it."; \
+		exit 1; \
+	fi
+	@echo "Starting documentation server at http://localhost:8080..."
+	@echo "Press Ctrl+C to stop the server"
+	@pkgsite -http=:8080
+
+doc-install: ## Install pkgsite for serving Go documentation locally
+	@echo "Installing pkgsite..."
+	@$(GO) install golang.org/x/pkgsite/cmd/pkgsite@latest
+	@echo "✅ pkgsite installed successfully"
+	@echo "Run 'make doc-serve' to start the documentation server"
+
 ##@ Cleanup
 .PHONY: clean clean-test
 clean: clean-test ## Clean all generated files
