@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -13,12 +14,6 @@ import (
 	b "github.com/morphy76/ggraph/pkg/builders"
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
-
-var _ g.SharedState = (*myState)(nil)
-
-type myState struct {
-	Message string
-}
 
 func additionTool(a int, b int) (int, error) {
 	return a + b, nil
@@ -42,6 +37,31 @@ func main() {
 	llmFn := func(chatService openai.ChatService, model string, conversationOptions ...a.ModelOption) g.NodeFn[a.Conversation] {
 		return func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) (a.Conversation, error) {
 
+			// 			systemMex := `
+			// Use all tools: feel free to use the available tools to answer the user's question through multiple tool calls.
+			// You must never perform arithmetic or reasoning operations yourself.
+			// You must always use the provided tools for every operation.
+			// If the output of one tool should be used by another tool:
+			// - reference it as a JSON object of the form {"from_call": "<previous_call_id>", "field": "result"};
+			// - Never substitute numeric results directly; always reference previous tool outputs using the {"from_call": "<previous_call_id>", "field": "result"} object format.
+			// Example of dependant tool calls where a divisionTool uses the output of an additionTool:
+			// [
+			// 	{
+			// 		"function": { "name": "additionTool", "arguments": "{"addend1": 4, "addend2": 5}" },
+			// 		"id": "call_1"
+			// 	},
+			// 	{
+			// 		"function": { "name": "divisionTool", "arguments": "{"dividend": {"from_call": "call_1", "field": "result"}, "divisor": 2}" }
+			// 	}
+			// ]`
+
+			// 			useMessages := append(
+			// 				[]a.Message{
+			// 					a.CreateMessage(a.System, systemMex),
+			// 				},
+			// 				userInput.Messages...,
+			// 			)
+
 			useOpts, err := a.CreateConversationOptions(
 				model,
 				userInput.Messages,
@@ -58,6 +78,9 @@ func main() {
 				return currentState, fmt.Errorf("failed to generate tool calls: %w", err)
 			}
 
+			dump, _ := json.Marshal(resp.Choices[0].Message.ToolCalls)
+			fmt.Printf("Rest:\n\n%s\n\n", dump)
+
 			answer := resp.Choices[0].Message.Content
 			currentState.Messages = append(userInput.Messages,
 				a.CreateMessage(a.Assistant, answer))
@@ -66,19 +89,19 @@ func main() {
 		}
 	}
 
-	tool1, err := t.CreateTool[int](additionTool, "Prompt: Adds two integers.", "Input: (int, int)", "Output: int")
+	tool1, err := t.CreateTool[int](additionTool, "Prompt: this tool is used to sum two integers.", "Input: addend1, addend2", "Required: addend1, addend2")
 	if err != nil {
 		log.Fatalf("Failed to create addition tool: %v", err)
 	}
 
-	tool2, err := t.CreateTool[int](divisionTool, "Prompt: Divides the first integer by the second.", "Input: (int, int)", "Output: int")
+	tool2, err := t.CreateTool[int](divisionTool, "Prompt: this tool is used to divide two integers.", "Input: dividend, divisor", "Required: dividend, divisor")
 	if err != nil {
 		log.Fatalf("Failed to create division tool: %v", err)
 	}
 
 	llmWithTools, err := o.CreateConversationNode(
 		"AgentWithTools",
-		openai.ChatModelGPT4_1Nano,
+		openai.ChatModelGPT5Nano,
 		client,
 		llmFn,
 		a.WithUser("ggraph"),
@@ -105,7 +128,7 @@ func main() {
 	}
 
 	graph.Invoke(a.CreateConversation(
-		a.CreateMessage(a.User, "Can you please add 4 and 5 and divide the result by 2?"),
+		a.CreateMessage(a.User, "Can you please add 4 and 5 and then divide the result by 2?"),
 	))
 
 	for {

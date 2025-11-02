@@ -102,6 +102,7 @@ func ConvertConversationOptions(modelOptions *a.ModelOptions) openai.ChatComplet
 	}
 
 	if len(tools) > 0 {
+		rv.ParallelToolCalls = openai.Bool(true)
 		rv.Tools = tools
 	}
 
@@ -147,14 +148,15 @@ func tool2Fn(tool *t.Tool) *openai.ChatCompletionFunctionToolParam {
 			"type": useType,
 		}
 	}
+
 	return &openai.ChatCompletionFunctionToolParam{
 		Function: openai.FunctionDefinitionParam{
 			Name:        tool.Name,
-			Description: openai.String(tool.Description()),
+			Description: openai.String(tool.BuildToolPrompt()),
 			Parameters: openai.FunctionParameters{
 				"type":       "object",
 				"properties": toolProps,
-				"required":   []string{},
+				"required":   tool.RequiredArgs(),
 			},
 		},
 	}

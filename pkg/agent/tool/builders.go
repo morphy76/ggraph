@@ -3,7 +3,6 @@ package tool
 import (
 	"reflect"
 	"runtime"
-	"strconv"
 	"strings"
 )
 
@@ -48,6 +47,20 @@ type ExecFn any
 func CreateTool[T any](fn ExecFn, descriptors ...string) (*Tool, error) {
 	// TODO fn is a builder which accepts builder args (pooled http clients, dbconnections,...) and returns a ExecFn
 
+	toolDesc := make(map[string]string, len(descriptors))
+	for _, desc := range descriptors {
+		parts := strings.Split(desc, ":")
+
+		if len(parts) < 2 {
+			return nil, ErrInvalidDescriptorFormat
+		}
+
+		role := strings.ToLower(strings.TrimSpace(parts[0]))
+		value := strings.TrimSpace(strings.Join(parts[1:], ":"))
+
+		toolDesc[role] = value
+	}
+
 	fnType := reflect.TypeOf(fn)
 	fnValue := reflect.ValueOf(fn)
 
@@ -64,38 +77,27 @@ func CreateTool[T any](fn ExecFn, descriptors ...string) (*Tool, error) {
 
 	toolFn := callable{fn: fnValue, in: fnType.NumIn()}
 
+	var t T
+	toolName := extractToolName(fn, reflect.TypeOf(t))
+
+	rv := &Tool{
+		Name:         toolName,
+		descriptions: toolDesc,
+		callable:     toolFn,
+	}
+
 	args := make([]Arg, fnType.NumIn())
 	for i := 0; i < fnType.NumIn(); i++ {
 		argType := fnType.In(i)
 		args[i] = Arg{
-			Name: "arg" + strconv.Itoa(i+1),
+			Name: rv.InputNameByIdx(i),
 			Type: argType.String(),
 		}
 	}
 
-	toolDesc := make(map[string]string, len(descriptors))
-	for _, desc := range descriptors {
-		parts := strings.Split(desc, ":")
+	rv.Args = args
 
-		if len(parts) != 2 {
-			return nil, ErrInvalidDescriptorFormat
-		}
-
-		role := strings.ToLower(strings.TrimSpace(parts[0]))
-		description := strings.TrimSpace(parts[1])
-
-		toolDesc[role] = description
-	}
-
-	var t T
-	toolName := extractToolName(fn, reflect.TypeOf(t))
-
-	return &Tool{
-		Name:         toolName,
-		Args:         args,
-		descriptions: toolDesc,
-		callable:     toolFn,
-	}, nil
+	return rv, nil
 }
 
 func extractToolName(fn any, genericType reflect.Type) string {

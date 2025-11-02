@@ -3,6 +3,8 @@ package tool
 import (
 	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
 )
 
 var (
@@ -14,6 +16,10 @@ var (
 	ErrInvalidDescriptorFormat = fmt.Errorf("invalid descriptor format (role:description expected)")
 	// ErrCallingToolInvalidArgsCount indicates that the number of arguments provided to the tool function is incorrect.
 	ErrCallingToolInvalidArgsCount = fmt.Errorf("invalid number of arguments provided to tool function")
+
+	descriptions = []string{"prompt", "description", "usage"}
+	requiredArgs = []string{"required", "required_args", "mandatory_args"}
+	inputs       = []string{"input", "inputs", "parameters", "args"}
 )
 
 type callable struct {
@@ -39,6 +45,10 @@ type Tool struct {
 	Args         []Arg
 	descriptions map[string]string
 	callable     callable
+
+	toolPrompt   string
+	requiredArgs []string
+	argNames     map[int]string
 }
 
 // Call invokes the tool function with the provided arguments.
@@ -69,10 +79,10 @@ func (t Tool) Call(args ...any) (any, error) {
 	rvs := t.callable.fn.Call(in)
 
 	if rvs[1].IsNil() {
-		return rvs[0].Interface().(any), nil
-	} else {
-		return nil, rvs[1].Interface().(error)
+		return rvs[0].Interface(), nil
 	}
+
+	return nil, rvs[1].Interface().(error)
 }
 
 // Description returns the tool's description.
@@ -87,7 +97,106 @@ func (t Tool) Call(args ...any) (any, error) {
 // Returns:
 //   - string: The tool's description.
 func (t Tool) Description() string {
-	return t.descriptionForRoles("prompt", "description", "usage")
+	return t.descriptionForRoles(descriptions...)
+}
+
+// BuildToolPrompt constructs a comprehensive tool prompt.
+//
+// It includes the tool's description, input parameters, and output parameters.
+//
+// Returns:
+//   - string: The constructed tool prompt.
+func (t *Tool) BuildToolPrompt() string {
+
+	if t.toolPrompt != "" {
+		return t.toolPrompt
+	}
+
+	desc := t.Description()
+	if desc != "" {
+		desc += "\n"
+	}
+
+	input := t.descriptionForRoles(inputs...)
+	types := make([]string, len(t.Args))
+	for i, arg := range t.Args {
+		types[i] = arg.Type
+	}
+	typesStr := strings.Join(types, ", ")
+	if input != "" {
+		desc += "Input hint:[ " + input + "] of types [" + typesStr + "]\n"
+	}
+
+	t.toolPrompt = desc
+
+	return t.toolPrompt
+}
+
+// RequiredArgs returns a list of required argument names for the tool.
+//
+// It looks for the "required", "required_args", or "mandatory_args" roles
+// in the tool's descriptions.
+//
+// Returns:
+//   - []string: A slice of required argument names.
+func (t *Tool) RequiredArgs() []string {
+
+	if t.requiredArgs != nil {
+		return t.requiredArgs
+	}
+
+	required := t.descriptionForRoles(requiredArgs...)
+	if required == "" {
+		return []string{}
+	}
+
+	parts := strings.Split(required, ",")
+	rv := make([]string, len(parts))
+	for i, arg := range parts {
+		rv[i] = strings.TrimSpace(arg)
+	}
+
+	t.requiredArgs = rv
+
+	return t.requiredArgs
+}
+
+// InputNameByIdx returns the name of the input argument at the specified index.
+//
+// If no specific names are provided in the tool's descriptions, it defaults to "arg<index>".
+//
+// Parameters:
+//   - idx: The index of the input argument.
+//
+// Returns:
+func (t *Tool) InputNameByIdx(idx int) string {
+
+	if t.argNames != nil && idx >= 0 && idx < len(t.argNames) {
+		if val, ok := t.argNames[idx]; ok {
+			return val
+		}
+	}
+
+	if t.argNames == nil {
+		t.argNames = make(map[int]string, len(t.Args))
+	}
+
+	inputNames := t.descriptionForRoles(inputs...)
+	if inputNames == "" {
+		t.argNames[idx] = "arg" + strconv.Itoa(idx)
+		return t.argNames[idx]
+	}
+
+	parts := strings.Split(inputNames, ",")
+	for i := range parts {
+		t.argNames[i] = strings.TrimSpace(parts[i])
+	}
+
+	rv, ok := t.argNames[idx]
+	if ok {
+		return rv
+	}
+	return "arg" + strconv.Itoa(idx)
 }
 
 func (t Tool) descriptionForRoles(role ...string) string {
