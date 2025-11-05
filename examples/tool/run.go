@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -36,7 +37,6 @@ func main() {
 
 	llmFn := func(chatService openai.ChatService, model string, conversationOptions ...a.ModelOption) g.NodeFn[a.Conversation] {
 		return func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) (a.Conversation, error) {
-
 			systemMex := `
 			Use all tools: feel free to use the available tools to answer the user's question through multiple tool calls.
 			You must never perform arithmetic or reasoning operations yourself.
@@ -55,12 +55,22 @@ func main() {
 				}
 			]`
 
+			usePastMessages := []a.Message{}
+			if len(currentState.Messages) > 0 {
+				usePastMessages = currentState.Messages
+			} else {
+				usePastMessages = userInput.Messages
+			}
+
 			useMessages := append(
 				[]a.Message{
 					a.CreateMessage(a.System, systemMex),
 				},
-				userInput.Messages...,
+				usePastMessages...,
 			)
+
+			pastMessages, _ := json.Marshal(usePastMessages)
+			log.Printf("Past messages for LLM call: %s", string(pastMessages))
 
 			useOpts, err := a.CreateConversationOptions(
 				model,
@@ -79,20 +89,23 @@ func main() {
 			}
 
 			answer := resp.Choices[0].Message.Content
-			currentState.Messages = append(userInput.Messages,
-				a.CreateMessage(a.Assistant, answer))
-
-			requestedToolCalls := resp.Choices[0].Message.ToolCalls
-			toolCalls := make([]t.ToolCall, 0, len(requestedToolCalls))
-			for _, openAIToolCall := range requestedToolCalls {
-				toolCall, err := o.ConvertToolCall(openAIToolCall)
-				if err != nil {
-					return currentState, fmt.Errorf("failed to convert tool call: %w", err)
-				}
-				toolCalls = append(toolCalls, *toolCall)
+			if answer != "" {
+				currentState.Messages = append(userInput.Messages,
+					a.CreateMessage(a.Assistant, answer))
 			}
 
-			currentState.ToolCalls = toolCalls
+			requestedToolCalls := resp.Choices[0].Message.ToolCalls
+			if len(requestedToolCalls) > 0 {
+				toolCalls := make([]t.ToolCall, 0, len(requestedToolCalls))
+				for _, openAIToolCall := range requestedToolCalls {
+					toolCall, err := o.ConvertToolCall(openAIToolCall)
+					if err != nil {
+						return currentState, fmt.Errorf("failed to convert tool call: %w", err)
+					}
+					toolCalls = append(toolCalls, *toolCall)
+				}
+				currentState.ToolCalls = toolCalls
+			}
 
 			return currentState, nil
 		}
@@ -140,13 +153,21 @@ func main() {
 		log.Fatalf("Graph validation failed: %v", err)
 	}
 
+	userInput := "What is the result of adding 15 and 27, and then dividing the sum by 3?"
 	graph.Invoke(a.CreateConversation(
-		a.CreateMessage(a.User, "Can you please add 4 and 5 and then divide the result by 2?"),
+		a.CreateMessage(a.User, userInput),
 	))
+	fmt.Println(userInput)
 
 	for {
 		entry := <-stateMonitorCh
-		fmt.Printf("[%s - Running: %t], Graph state message: %v, Error: %v\n", entry.Node, entry.Running, entry.NewState, entry.Error)
+		if entry.Error != nil {
+			fmt.Printf("Error during graph execution: %v\n", entry.Error)
+		} else {
+			if len(entry.NewState.Messages) > 0 {
+				fmt.Println(entry.NewState.Messages[len(entry.NewState.Messages)-1].Content)
+			}
+		}
 		if !entry.Running {
 			break
 		}

@@ -49,18 +49,22 @@ func runToolsFunc(tools ...*t.Tool) g.NodeFn[a.Conversation] {
 						break
 					}
 				}
-				useArgs := call.ArgsAsSortedSlice(useTool)
-				rv, err := useTool.Call(useArgs...)
-				if err != nil {
-					errorToolMessage := fmt.Sprintf("{\"id\": \"%s\", \"name\": \"%s\", \"error\": \"%s\"}", call.Id, useTool.Name, err)
-					callStateMutex.Lock()
-					callState.Messages = append(callState.Messages, a.CreateMessage(a.Tool, errorToolMessage))
-					callStateMutex.Unlock()
-				}
+				// useArgs := call.ArgsAsSortedSlice(useTool)
+				// TODO this call fails for arg types
+				// rv, err := useTool.Call(useArgs...)
+				// err := errors.New("not yet implemented: tool arguments parsing")
+				rv := 10
+				// if err != nil {
+				// 	errorToolMessage := fmt.Sprintf("{\"id\": \"%s\", \"name\": \"%s\", \"error\": \"%s\"}", call.Id, useTool.Name, err)
+				// 	callStateMutex.Lock()
+				// 	callState.Messages = append(callState.Messages, a.CreateMessage(a.Tool, errorToolMessage))
+				// 	callStateMutex.Unlock()
+				// }
 
 				resultToolMessage := fmt.Sprintf("{\"id\": \"%s\", \"name\": \"%s\", \"result\": %v}", call.Id, useTool.Name, rv)
 				callStateMutex.Lock()
-				callState.Messages = append(callState.Messages, a.CreateMessage(a.Tool, resultToolMessage))
+				// TODO proper response for a tool call, User role is not correct here, it has to be Tool role
+				callState.Messages = append(callState.Messages, a.CreateMessage(a.User, resultToolMessage))
 				callStateMutex.Unlock()
 			}(call)
 		}
