@@ -6,8 +6,12 @@ import (
 )
 
 const (
-	// RouteTagToolExecutor is the label key used to identify edges meant for tool execution.
-	RouteTagToolExecutor = "tool_executor"
+	// RouteTagToolKey is the label key used to identify edges meant for tool execution.
+	RouteTagToolKey = "tool_executor"
+	// RouteTagToolRequest is the label value indicating a tool request edge.
+	RouteTagToolRequest = "tool_request"
+	// RouteTagToolResponse is the label value indicating a tool response edge.
+	RouteTagToolResponse = "tool_response"
 )
 
 // ToolProcessorRoutingFn is a routing function that directs the graph execution
@@ -24,13 +28,20 @@ const (
 // Returns:
 //   - The selected edge based on the routing logic.
 func ToolProcessorRoutingFn(userInput, currentState Conversation, edges []g.Edge[Conversation]) g.Edge[Conversation] {
-	if len(currentState.ToolCalls) == 0 {
-		return i.AnyRoute(userInput, currentState, edges)
-	}
+	executableEdges := make([]g.Edge[Conversation], 0)
+	nonExecutableEdges := make([]g.Edge[Conversation], 0)
+
 	for _, edge := range edges {
-		if _, ok := edge.LabelByKey(RouteTagToolExecutor); ok {
-			return edge
+		if val, ok := edge.LabelByKey(RouteTagToolKey); ok && val == RouteTagToolRequest {
+			executableEdges = append(executableEdges, edge)
+		} else {
+			nonExecutableEdges = append(nonExecutableEdges, edge)
 		}
 	}
-	return nil
+
+	if len(currentState.ToolCalls) == 0 {
+		return i.AnyRoute(userInput, currentState, nonExecutableEdges)
+	}
+
+	return i.AnyRoute(userInput, currentState, executableEdges)
 }

@@ -84,7 +84,7 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 
 		// Create test edges - one with tool executor label, one without
 		edge1 := b.CreateEdge(node1, node2, map[string]string{"type": "normal"})
-		edge2 := b.CreateEdge(node1, node3, map[string]string{a.RouteTagToolExecutor: "true"})
+		edge2 := b.CreateEdge(node1, node3, map[string]string{a.RouteTagToolKey: a.RouteTagToolRequest})
 
 		edges := []g.Edge[a.Conversation]{edge1, edge2}
 
@@ -92,8 +92,8 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 		mockTool := createMockTool(t)
 		toolCall := tool.ToolCall{
 			Id:        "call_123",
-			UsingTool: *mockTool,
-			Arguments: map[string]any{"arg1": "value1"},
+			ToolName:  mockTool.Name,
+			Arguments: map[string]any{"key1": "value1"},
 		}
 
 		// Create conversation state with tool calls
@@ -115,8 +115,8 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 		}
 
 		// Verify the selected edge has the tool_executor label
-		if label, ok := selectedEdge.LabelByKey(a.RouteTagToolExecutor); !ok || label != "true" {
-			t.Errorf("Selected edge should have tool_executor label, got: %v, %v", label, ok)
+		if label, ok := selectedEdge.LabelByKey(a.RouteTagToolKey); !ok || label != a.RouteTagToolRequest {
+			t.Errorf("Selected edge should have tool_executor label with value '%s', got: %v, %v", a.RouteTagToolRequest, label, ok)
 		}
 	})
 
@@ -142,8 +142,8 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 		mockTool := createMockTool(t)
 		toolCall := tool.ToolCall{
 			Id:        "call_456",
-			UsingTool: *mockTool,
-			Arguments: map[string]any{"arg1": "value1"},
+			ToolName:  mockTool.Name,
+			Arguments: map[string]any{"key1": "value1"},
 		}
 
 		// Create conversation state with tool calls
@@ -174,7 +174,7 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 		}
 
 		// Create test edge with tool executor label
-		executorEdge := b.CreateEdge(node1, node2, map[string]string{a.RouteTagToolExecutor: "yes"})
+		executorEdge := b.CreateEdge(node1, node2, map[string]string{a.RouteTagToolKey: a.RouteTagToolRequest})
 
 		edges := []g.Edge[a.Conversation]{executorEdge}
 
@@ -185,13 +185,13 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 		toolCalls := []tool.ToolCall{
 			{
 				Id:        "call_1",
-				UsingTool: *mockTool1,
-				Arguments: map[string]any{"arg1": "value1"},
+				ToolName:  mockTool1.Name,
+				Arguments: map[string]any{"key1": "value1"},
 			},
 			{
 				Id:        "call_2",
-				UsingTool: *mockTool2,
-				Arguments: map[string]any{"arg2": "value2"},
+				ToolName:  mockTool2.Name,
+				Arguments: map[string]any{"key1": "value2"},
 			},
 		}
 

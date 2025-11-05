@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	o "github.com/morphy76/ggraph/pkg/agent/openai"
-	tool "github.com/morphy76/ggraph/pkg/agent/tool"
+	"github.com/morphy76/ggraph/pkg/agent/tool"
 	"github.com/openai/openai-go/v3"
 )
 
@@ -27,19 +27,8 @@ func TestConvertToolCall(t *testing.T) {
 			t.Fatalf("Failed to parse JSON: %v", err)
 		}
 
-		// Create a mock tool for testing with the named function
-		mockTool, err := tool.CreateTool[int](additionTool, "prompt: Addition tool for testing")
-		if err != nil {
-			t.Fatalf("Failed to create mock tool: %v", err)
-		}
-
-		// Create a tool registry
-		tools := map[string]*tool.Tool{
-			"additionTool": mockTool,
-		}
-
 		// Convert the OpenAI tool call to our internal ToolCall
-		toolCall, err := o.ConvertToolCall(openAIToolCalls[0], tools)
+		toolCall, err := o.ConvertToolCall(openAIToolCalls[0])
 		if err != nil {
 			t.Fatalf("ConvertToolCall failed: %v", err)
 		}
@@ -50,45 +39,29 @@ func TestConvertToolCall(t *testing.T) {
 			t.Errorf("Expected ID %s, got %s", expectedID, toolCall.Id)
 		}
 
-		if toolCall.UsingTool.Name != "additionTool" {
-			t.Errorf("Expected tool name 'additionTool', got %s", toolCall.UsingTool.Name)
+		if toolCall.ToolName != "additionTool" {
+			t.Errorf("Expected tool name 'additionTool', got %s", toolCall.ToolName)
+		}
+
+		// additionTool expects two arguments: addend1 and addend2
+		additionTool, err := tool.CreateTool[int](func(addend1, addend2 int) (int, error) {
+			return addend1 + addend2, nil
+		}, "input:addend1, addend2")
+		if err != nil {
+			t.Fatalf("Failed to create addition tool: %v", err)
 		}
 
 		// Verify arguments were parsed correctly
 		expectedAddend1 := float64(4) // JSON numbers are parsed as float64
 		expectedAddend2 := float64(5)
 
-		if toolCall.Arguments["addend1"] != expectedAddend1 {
-			t.Errorf("Expected addend1 %v, got %v", expectedAddend1, toolCall.Arguments["addend1"])
+		useArgs := toolCall.ArgsAsSortedSlice(additionTool) // Using the predefined tool for argument order
+		if useArgs[0] != expectedAddend1 {
+			t.Errorf("Expected addend1 %v, got %v", expectedAddend1, useArgs[0])
 		}
 
-		if toolCall.Arguments["addend2"] != expectedAddend2 {
-			t.Errorf("Expected addend2 %v, got %v", expectedAddend2, toolCall.Arguments["addend2"])
-		}
-	})
-
-	t.Run("tool_not_found", func(t *testing.T) {
-		// Test data with unknown tool name
-		jsonData := `[{"id":"call_123","function":{"arguments":"{}","name":"unknownTool"},"type":"function"}]`
-
-		var openAIToolCalls []openai.ChatCompletionMessageToolCallUnion
-		err := json.Unmarshal([]byte(jsonData), &openAIToolCalls)
-		if err != nil {
-			t.Fatalf("Failed to parse JSON: %v", err)
-		}
-
-		// Empty tool registry
-		tools := map[string]*tool.Tool{}
-
-		// Convert should fail
-		_, err = o.ConvertToolCall(openAIToolCalls[0], tools)
-		if err == nil {
-			t.Fatal("Expected error when tool not found, but got none")
-		}
-
-		expectedError := "tool 'unknownTool' not found in tool registry"
-		if err.Error() != expectedError {
-			t.Errorf("Expected error message '%s', got '%s'", expectedError, err.Error())
+		if useArgs[1] != expectedAddend2 {
+			t.Errorf("Expected addend2 %v, got %v", expectedAddend2, useArgs[1])
 		}
 	})
 
@@ -102,16 +75,7 @@ func TestConvertToolCall(t *testing.T) {
 			t.Fatalf("Failed to parse JSON: %v", err)
 		}
 
-		mockTool, err := tool.CreateTool[int](additionTool, "prompt: Addition tool for testing")
-		if err != nil {
-			t.Fatalf("Failed to create mock tool: %v", err)
-		}
-
-		tools := map[string]*tool.Tool{
-			"additionTool": mockTool,
-		}
-
-		toolCall, err := o.ConvertToolCall(openAIToolCalls[0], tools)
+		toolCall, err := o.ConvertToolCall(openAIToolCalls[0])
 		if err != nil {
 			t.Fatalf("ConvertToolCall failed: %v", err)
 		}
@@ -132,17 +96,8 @@ func TestConvertToolCall(t *testing.T) {
 			t.Fatalf("Failed to parse JSON: %v", err)
 		}
 
-		mockTool, err := tool.CreateTool[int](additionTool, "prompt: Addition tool for testing")
-		if err != nil {
-			t.Fatalf("Failed to create mock tool: %v", err)
-		}
-
-		tools := map[string]*tool.Tool{
-			"additionTool": mockTool,
-		}
-
 		// Convert should fail due to invalid arguments JSON
-		_, err = o.ConvertToolCall(openAIToolCalls[0], tools)
+		_, err = o.ConvertToolCall(openAIToolCalls[0])
 		if err == nil {
 			t.Fatal("Expected error when arguments JSON is invalid, but got none")
 		}

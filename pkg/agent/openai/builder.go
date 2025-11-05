@@ -111,7 +111,7 @@ func CreateConversationNode(
 
 	routingPolicy, err := b.CreateConditionalRoutePolicy(a.ToolProcessorRoutingFn)
 	if err != nil {
-		return nil, fmt.Errorf("cannot create a conversation node %w", err)
+		return nil, fmt.Errorf("cannot create a conversation node: %w", err)
 	}
 
 	rv, err := b.NewNodeBuilder(name, openAIFn).

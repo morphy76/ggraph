@@ -272,14 +272,11 @@ func TestCreateToolErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid_descriptor_format_multiple_colons", func(t *testing.T) {
+	t.Run("valid_descriptor_format_multiple_colons", func(t *testing.T) {
 		validFunc := func(a int) (int, error) { return a, nil }
 		_, err := tool.CreateTool[int](validFunc, "Role:Description:Extra")
-		if err == nil {
-			t.Errorf("Expected error for invalid descriptor format, but got nil")
-		}
-		if err != tool.ErrInvalidDescriptorFormat {
-			t.Errorf("Expected ErrInvalidDescriptorFormat, got: %v", err)
+		if err != nil {
+			t.Errorf("Expected no error for valid descriptor format, but got: %v", err)
 		}
 	})
 

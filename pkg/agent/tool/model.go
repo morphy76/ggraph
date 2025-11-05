@@ -37,9 +37,20 @@ type Arg struct {
 
 // ToolCall represents a single tool call in a conversation.
 type ToolCall struct {
-	Id        string
-	UsingTool Tool
+	// Id is the unique identifier for the tool call.
+	Id string
+	// ToolName is the name of the tool being called.
+	ToolName string
+	// Arguments are the arguments passed to the tool.
 	Arguments map[string]any
+}
+
+func (t ToolCall) ArgsAsSortedSlice(tool *Tool) []any {
+	args := make([]any, 0, len(tool.Args))
+	for idx := range tool.Args {
+		args = append(args, t.Arguments[tool.InputNameByIdx(idx)])
+	}
+	return args
 }
 
 // Tool represents a callable tool with metadata.

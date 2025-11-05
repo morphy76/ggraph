@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 
 	"github.com/openai/openai-go/v3"
 
 	a "github.com/morphy76/ggraph/pkg/agent"
+	ag "github.com/morphy76/ggraph/pkg/agent/graph"
 	o "github.com/morphy76/ggraph/pkg/agent/openai"
 	t "github.com/morphy76/ggraph/pkg/agent/tool"
 	b "github.com/morphy76/ggraph/pkg/builders"
@@ -78,12 +78,21 @@ func main() {
 				return currentState, fmt.Errorf("failed to generate tool calls: %w", err)
 			}
 
-			dump, _ := json.Marshal(resp.Choices[0].Message.ToolCalls)
-			fmt.Printf("Rest:\n\n%s\n\n", dump)
-
 			answer := resp.Choices[0].Message.Content
 			currentState.Messages = append(userInput.Messages,
 				a.CreateMessage(a.Assistant, answer))
+
+			requestedToolCalls := resp.Choices[0].Message.ToolCalls
+			toolCalls := make([]t.ToolCall, 0, len(requestedToolCalls))
+			for _, openAIToolCall := range requestedToolCalls {
+				toolCall, err := o.ConvertToolCall(openAIToolCall)
+				if err != nil {
+					return currentState, fmt.Errorf("failed to convert tool call: %w", err)
+				}
+				toolCalls = append(toolCalls, *toolCall)
+			}
+
+			currentState.ToolCalls = toolCalls
 
 			return currentState, nil
 		}
@@ -111,7 +120,11 @@ func main() {
 		log.Fatalf("Failed to create agent with tools node: %v", err)
 	}
 
+	toolProcessor, err := ag.CreateToolNode("ToolProcessor", tool1, tool2)
+
 	startEdge := b.CreateStartEdge(llmWithTools)
+	toolRequestEdge := b.CreateEdge(llmWithTools, toolProcessor, map[string]string{a.RouteTagToolKey: a.RouteTagToolRequest})
+	toolResponseEdge := b.CreateEdge(toolProcessor, llmWithTools, map[string]string{a.RouteTagToolKey: a.RouteTagToolResponse})
 	endEdge := b.CreateEndEdge(llmWithTools)
 
 	stateMonitorCh := make(chan g.StateMonitorEntry[a.Conversation], 10)
@@ -119,7 +132,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Runtime creation failed: %v", err)
 	}
-	graph.AddEdge(endEdge)
+	graph.AddEdge(toolRequestEdge, toolResponseEdge, endEdge)
 	defer graph.Shutdown()
 
 	err = graph.Validate()
