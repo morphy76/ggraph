@@ -2,6 +2,8 @@ package agent
 
 import (
 	"time"
+
+	t "github.com/morphy76/ggraph/pkg/agent/tool"
 )
 
 // MessageRole defines the role of a message in a chat conversation.
@@ -27,5 +29,8 @@ type Message struct {
 
 // Conversation represents a chat-based language model for an agent.
 type Conversation struct {
+	// Messages holds the sequence of messages in the conversation.
 	Messages []Message
+	// ToolCalls holds the sequence of tool calls made during the conversation.
+	ToolCalls []t.ToolCall
 }

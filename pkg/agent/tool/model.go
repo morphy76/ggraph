@@ -1,7 +1,7 @@
 package tool
 
 import (
-	"fmt"
+	"errors"
 	"reflect"
 	"strconv"
 	"strings"
@@ -9,13 +9,13 @@ import (
 
 var (
 	// ErrToolFnNotFunction indicates that the provided tool function is not a function.
-	ErrToolFnNotFunction = fmt.Errorf("tool function must be a function")
+	ErrToolFnNotFunction = errors.New("tool function must be a function")
 	// ErrToolFnInvalidReturnCount indicates that the tool function does not have the correct return count.
-	ErrToolFnInvalidReturnCount = fmt.Errorf("tool function must return exactly two values: (T, error)")
+	ErrToolFnInvalidReturnCount = errors.New("tool function must return exactly two values: (T, error)")
 	// ErrInvalidDescriptorFormat indicates that the tool descriptor format is invalid.
-	ErrInvalidDescriptorFormat = fmt.Errorf("invalid descriptor format (role:description expected)")
+	ErrInvalidDescriptorFormat = errors.New("invalid descriptor format (role:description expected)")
 	// ErrCallingToolInvalidArgsCount indicates that the number of arguments provided to the tool function is incorrect.
-	ErrCallingToolInvalidArgsCount = fmt.Errorf("invalid number of arguments provided to tool function")
+	ErrCallingToolInvalidArgsCount = errors.New("invalid number of arguments provided to tool function")
 
 	descriptions = []string{"prompt", "description", "usage"}
 	requiredArgs = []string{"required", "required_args", "mandatory_args"}
@@ -33,6 +33,13 @@ type Arg struct {
 	Name string
 	// Type is the type of the argument.
 	Type string
+}
+
+// ToolCall represents a single tool call in a conversation.
+type ToolCall struct {
+	Id        string
+	UsingTool Tool
+	Arguments map[string]any
 }
 
 // Tool represents a callable tool with metadata.

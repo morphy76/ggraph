@@ -37,34 +37,34 @@ func main() {
 	llmFn := func(chatService openai.ChatService, model string, conversationOptions ...a.ModelOption) g.NodeFn[a.Conversation] {
 		return func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) (a.Conversation, error) {
 
-			// 			systemMex := `
-			// Use all tools: feel free to use the available tools to answer the user's question through multiple tool calls.
-			// You must never perform arithmetic or reasoning operations yourself.
-			// You must always use the provided tools for every operation.
-			// If the output of one tool should be used by another tool:
-			// - reference it as a JSON object of the form {"from_call": "<previous_call_id>", "field": "result"};
-			// - Never substitute numeric results directly; always reference previous tool outputs using the {"from_call": "<previous_call_id>", "field": "result"} object format.
-			// Example of dependant tool calls where a divisionTool uses the output of an additionTool:
-			// [
-			// 	{
-			// 		"function": { "name": "additionTool", "arguments": "{"addend1": 4, "addend2": 5}" },
-			// 		"id": "call_1"
-			// 	},
-			// 	{
-			// 		"function": { "name": "divisionTool", "arguments": "{"dividend": {"from_call": "call_1", "field": "result"}, "divisor": 2}" }
-			// 	}
-			// ]`
+			systemMex := `
+			Use all tools: feel free to use the available tools to answer the user's question through multiple tool calls.
+			You must never perform arithmetic or reasoning operations yourself.
+			You must always use the provided tools for every operation.
+			If the output of one tool should be used by another tool:
+			- reference it as a JSON object of the form {"from_call": "<previous_call_id>", "field": "result"};
+			- Never substitute numeric results directly; always reference previous tool outputs using the {"from_call": "<previous_call_id>", "field": "result"} object format.
+			Example of dependant tool calls where a divisionTool uses the output of an additionTool:
+			[
+				{
+					"function": { "name": "additionTool", "arguments": "{"addend1": 4, "addend2": 5}" },
+					"id": "call_1"
+				},
+				{
+					"function": { "name": "divisionTool", "arguments": "{"dividend": {"from_call": "call_1", "field": "result"}, "divisor": 2}" }
+				}
+			]`
 
-			// 			useMessages := append(
-			// 				[]a.Message{
-			// 					a.CreateMessage(a.System, systemMex),
-			// 				},
-			// 				userInput.Messages...,
-			// 			)
+			useMessages := append(
+				[]a.Message{
+					a.CreateMessage(a.System, systemMex),
+				},
+				userInput.Messages...,
+			)
 
 			useOpts, err := a.CreateConversationOptions(
 				model,
-				userInput.Messages,
+				useMessages,
 				conversationOptions...,
 			)
 			if err != nil {
@@ -94,7 +94,7 @@ func main() {
 		log.Fatalf("Failed to create addition tool: %v", err)
 	}
 
-	tool2, err := t.CreateTool[int](divisionTool, "Prompt: this tool is used to divide two integers.", "Input: dividend, divisor", "Required: dividend, divisor")
+	tool2, err := t.CreateTool[int](divisionTool, "Prompt: this tool is used to divide a dividend by a divisor.", "Input: dividend, divisor", "Required: dividend, divisor")
 	if err != nil {
 		log.Fatalf("Failed to create division tool: %v", err)
 	}
