@@ -2,12 +2,15 @@ package tool
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 )
 
 var (
+	// ErrToolNotFound indicates that the specified tool was not found.
+	ErrToolNotFound = errors.New("tool not found")
 	// ErrToolFnNotFunction indicates that the provided tool function is not a function.
 	ErrToolFnNotFunction = errors.New("tool function must be a function")
 	// ErrToolFnInvalidReturnCount indicates that the tool function does not have the correct return count.
@@ -35,17 +38,24 @@ type Arg struct {
 	Type string
 }
 
-// ToolCall represents a single tool call in a conversation.
-type ToolCall struct {
-	// Id is the unique identifier for the tool call.
-	Id string
+// FnCall represents a single tool call in a conversation.
+type FnCall struct {
+	// ID is the unique identifier for the tool call.
+	ID string
 	// ToolName is the name of the tool being called.
 	ToolName string
 	// Arguments are the arguments passed to the tool.
 	Arguments map[string]any
 }
 
-func (t ToolCall) ArgsAsSortedSlice(tool *Tool) []any {
+// ArgsAsSortedSlice converts the Arguments map to a sorted slice based on the tool's argument order.
+//
+// Parameters:
+//   - tool: The tool whose argument order is used for sorting.
+//
+// Returns:
+//   - []any: A slice of arguments sorted according to the tool's argument order.
+func (t FnCall) ArgsAsSortedSlice(tool *Tool) []any {
 	args := make([]any, 0, len(tool.Args))
 	for idx := range tool.Args {
 		args = append(args, t.Arguments[tool.InputNameByIdx(idx)])
@@ -91,7 +101,18 @@ func (t Tool) Call(args ...any) (any, error) {
 
 	in := make([]reflect.Value, len(args))
 	for i, arg := range args {
-		in[i] = reflect.ValueOf(arg)
+		expectedType := t.callable.fn.Type().In(i)
+		argValue := reflect.ValueOf(arg)
+
+		if argValue.Type() != expectedType {
+			convertedValue, err := convertToType(arg, expectedType)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert argument %d: %w", i, err)
+			}
+			in[i] = convertedValue
+		} else {
+			in[i] = argValue
+		}
 	}
 
 	rvs := t.callable.fn.Call(in)
@@ -224,4 +245,51 @@ func (t Tool) descriptionForRoles(role ...string) string {
 		}
 	}
 	return ""
+}
+
+func convertToType(value any, targetType reflect.Type) (reflect.Value, error) {
+	sourceValue := reflect.ValueOf(value)
+	sourceType := sourceValue.Type()
+
+	if sourceType == targetType {
+		return sourceValue, nil
+	}
+
+	switch targetType.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		switch sourceType.Kind() {
+		case reflect.Float32, reflect.Float64:
+			floatVal := sourceValue.Float()
+			intVal := int64(floatVal)
+			return reflect.ValueOf(intVal).Convert(targetType), nil
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return sourceValue.Convert(targetType), nil
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			return sourceValue.Convert(targetType), nil
+		}
+	case reflect.Float32, reflect.Float64:
+		switch sourceType.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return sourceValue.Convert(targetType), nil
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			return sourceValue.Convert(targetType), nil
+		case reflect.Float32, reflect.Float64:
+			return sourceValue.Convert(targetType), nil
+		}
+	case reflect.String:
+		if sourceType.Kind() == reflect.String {
+			return sourceValue, nil
+		}
+		return reflect.ValueOf(fmt.Sprintf("%v", value)), nil
+	case reflect.Bool:
+		if sourceType.Kind() == reflect.Bool {
+			return sourceValue, nil
+		}
+	}
+
+	if sourceType.ConvertibleTo(targetType) {
+		return sourceValue.Convert(targetType), nil
+	}
+
+	return reflect.Value{}, fmt.Errorf("cannot convert %v to %v", sourceType, targetType)
 }

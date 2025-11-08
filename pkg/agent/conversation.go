@@ -22,15 +22,20 @@ const (
 
 // Message represents a single message in a chat conversation.
 type Message struct {
-	Ts      time.Time
-	Role    MessageRole
+	// Timestamp of the message.
+	Ts time.Time
+	// Role of the message (System, User, Assistant, Tool).
+	Role MessageRole
+	// Content of the message.
 	Content string
+	// Tool calls made in the message.
+	ToolCalls []t.FnCall
 }
 
 // Conversation represents a chat-based language model for an agent.
 type Conversation struct {
 	// Messages holds the sequence of messages in the conversation.
 	Messages []Message
-	// ToolCalls holds the sequence of tool calls made during the conversation.
-	ToolCalls []t.ToolCall
+	// CurrentToolCalls holds the current tool calls to be executed.
+	CurrentToolCalls []t.FnCall
 }

@@ -39,7 +39,7 @@ func ToolProcessorRoutingFn(userInput, currentState Conversation, edges []g.Edge
 		}
 	}
 
-	if len(currentState.ToolCalls) == 0 {
+	if len(currentState.CurrentToolCalls) == 0 {
 		return i.AnyRoute(userInput, currentState, nonExecutableEdges)
 	}
 

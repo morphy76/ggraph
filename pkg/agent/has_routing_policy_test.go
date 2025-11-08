@@ -40,8 +40,8 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 
 		// Create conversation state with no tool calls
 		conversation := a.Conversation{
-			Messages:  []a.Message{a.CreateMessage(a.User, "Hello")},
-			ToolCalls: []tool.ToolCall{}, // Empty tool calls
+			Messages:         []a.Message{a.CreateMessage(a.User, "Hello")},
+			CurrentToolCalls: []tool.FnCall{}, // Empty tool calls
 		}
 
 		// Call the routing function
@@ -90,16 +90,16 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 
 		// Create a mock tool call
 		mockTool := createMockTool(t)
-		toolCall := tool.ToolCall{
-			Id:        "call_123",
+		toolCall := tool.FnCall{
+			ID:        "call_123",
 			ToolName:  mockTool.Name,
 			Arguments: map[string]any{"key1": "value1"},
 		}
 
 		// Create conversation state with tool calls
 		conversation := a.Conversation{
-			Messages:  []a.Message{a.CreateMessage(a.User, "Use a tool")},
-			ToolCalls: []tool.ToolCall{toolCall},
+			Messages:         []a.Message{a.CreateMessage(a.User, "Use a tool")},
+			CurrentToolCalls: []tool.FnCall{toolCall},
 		}
 
 		// Call the routing function
@@ -140,16 +140,16 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 
 		// Create a mock tool call
 		mockTool := createMockTool(t)
-		toolCall := tool.ToolCall{
-			Id:        "call_456",
+		toolCall := tool.FnCall{
+			ID:        "call_456",
 			ToolName:  mockTool.Name,
 			Arguments: map[string]any{"key1": "value1"},
 		}
 
 		// Create conversation state with tool calls
 		conversation := a.Conversation{
-			Messages:  []a.Message{a.CreateMessage(a.User, "Use a tool")},
-			ToolCalls: []tool.ToolCall{toolCall},
+			Messages:         []a.Message{a.CreateMessage(a.User, "Use a tool")},
+			CurrentToolCalls: []tool.FnCall{toolCall},
 		}
 
 		// Call the routing function
@@ -182,14 +182,14 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 		mockTool1 := createMockTool(t)
 		mockTool2 := createMockTool(t)
 
-		toolCalls := []tool.ToolCall{
+		toolCalls := []tool.FnCall{
 			{
-				Id:        "call_1",
+				ID:        "call_1",
 				ToolName:  mockTool1.Name,
 				Arguments: map[string]any{"key1": "value1"},
 			},
 			{
-				Id:        "call_2",
+				ID:        "call_2",
 				ToolName:  mockTool2.Name,
 				Arguments: map[string]any{"key1": "value2"},
 			},
@@ -197,8 +197,8 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 
 		// Create conversation state with multiple tool calls
 		conversation := a.Conversation{
-			Messages:  []a.Message{a.CreateMessage(a.User, "Use multiple tools")},
-			ToolCalls: toolCalls,
+			Messages:         []a.Message{a.CreateMessage(a.User, "Use multiple tools")},
+			CurrentToolCalls: toolCalls,
 		}
 
 		// Call the routing function
@@ -220,8 +220,8 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 
 		// Create conversation state with no tool calls
 		conversation := a.Conversation{
-			Messages:  []a.Message{a.CreateMessage(a.User, "Hello")},
-			ToolCalls: []tool.ToolCall{},
+			Messages:         []a.Message{a.CreateMessage(a.User, "Hello")},
+			CurrentToolCalls: []tool.FnCall{},
 		}
 
 		// Call the routing function

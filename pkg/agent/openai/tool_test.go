@@ -35,8 +35,8 @@ func TestConvertToolCall(t *testing.T) {
 
 		// Verify the conversion
 		expectedID := "call_DwJfIP6DcYFG3PiaVvxQoqAy"
-		if toolCall.Id != expectedID {
-			t.Errorf("Expected ID %s, got %s", expectedID, toolCall.Id)
+		if toolCall.ID != expectedID {
+			t.Errorf("Expected ID %s, got %s", expectedID, toolCall.ID)
 		}
 
 		if toolCall.ToolName != "additionTool" {

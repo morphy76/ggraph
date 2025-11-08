@@ -23,7 +23,7 @@ var (
 // Returns:
 //   - A ToolCall structure with the converted data
 //   - An error if conversion fails
-func ConvertToolCall(openAIToolCall openai.ChatCompletionMessageToolCallUnion) (*t.ToolCall, error) {
+func ConvertToolCall(openAIToolCall openai.ChatCompletionMessageToolCallUnion) (*t.FnCall, error) {
 	functionToolCall := openAIToolCall.AsFunction()
 	toolName := functionToolCall.Function.Name
 
@@ -37,8 +37,8 @@ func ConvertToolCall(openAIToolCall openai.ChatCompletionMessageToolCallUnion) (
 		arguments = make(map[string]any)
 	}
 
-	return &t.ToolCall{
-		Id:        openAIToolCall.ID,
+	return &t.FnCall{
+		ID:        openAIToolCall.ID,
 		ToolName:  toolName,
 		Arguments: arguments,
 	}, nil

@@ -1,6 +1,9 @@
 package openai
 
 import (
+	"encoding/json"
+	"strings"
+
 	"github.com/openai/openai-go/v3"
 
 	a "github.com/morphy76/ggraph/pkg/agent"
@@ -84,7 +87,29 @@ func ConvertConversationOptions(modelOptions *a.ModelOptions) openai.ChatComplet
 			union = openai.UserMessage(msg.Content)
 		case a.Assistant:
 			union = openai.AssistantMessage(msg.Content)
+			useUnion := union.OfAssistant
+			if len(msg.ToolCalls) > 0 {
+				useUnion.ToolCalls = make([]openai.ChatCompletionMessageToolCallUnionParam, len(msg.ToolCalls))
+				for i, tc := range msg.ToolCalls {
+					argsAsString, _ := json.Marshal(tc.Arguments)
+					useUnion.ToolCalls[i] = openai.ChatCompletionMessageToolCallUnionParam{
+						OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
+							ID: tc.ID,
+							Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
+								Name:      tc.ToolName,
+								Arguments: string(argsAsString),
+							},
+						},
+					}
+				}
+
+				union.OfAssistant = useUnion
+			}
+		case a.Tool:
+			toolAnswer := strings.SplitN(msg.Content, ":", 2)
+			union = openai.ToolMessage(toolAnswer[1], toolAnswer[0])
 		}
+
 		messages[i] = union
 	}
 

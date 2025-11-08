@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 
@@ -17,10 +16,12 @@ import (
 )
 
 func additionTool(a int, b int) (int, error) {
+	fmt.Printf("=======>>> additionTool with args %d, %d\n", a, b) // DEBUG
 	return a + b, nil
 }
 
 func divisionTool(a int, b int) (int, error) {
+	fmt.Printf("=======>>> divisionTool with args %d, %d\n", a, b) // DEBUG
 	if b == 0 {
 		return 0, fmt.Errorf("division by zero")
 	}
@@ -55,22 +56,15 @@ func main() {
 				}
 			]`
 
-			usePastMessages := []a.Message{}
+			useMessages := []a.Message{}
 			if len(currentState.Messages) > 0 {
-				usePastMessages = currentState.Messages
+				useMessages = currentState.Messages
 			} else {
-				usePastMessages = userInput.Messages
+				useMessages = append(useMessages, a.CreateMessage(a.System, systemMex))
+				useMessages = append(useMessages, userInput.Messages...)
 			}
 
-			useMessages := append(
-				[]a.Message{
-					a.CreateMessage(a.System, systemMex),
-				},
-				usePastMessages...,
-			)
-
-			pastMessages, _ := json.Marshal(usePastMessages)
-			log.Printf("Past messages for LLM call: %s", string(pastMessages))
+			currentState.Messages = useMessages
 
 			useOpts, err := a.CreateConversationOptions(
 				model,
@@ -88,15 +82,11 @@ func main() {
 				return currentState, fmt.Errorf("failed to generate tool calls: %w", err)
 			}
 
-			answer := resp.Choices[0].Message.Content
-			if answer != "" {
-				currentState.Messages = append(userInput.Messages,
-					a.CreateMessage(a.Assistant, answer))
-			}
-
+			answer := resp.Choices[0].Message
+			useAnswer := a.CreateMessage(a.Assistant, answer.Content)
 			requestedToolCalls := resp.Choices[0].Message.ToolCalls
 			if len(requestedToolCalls) > 0 {
-				toolCalls := make([]t.ToolCall, 0, len(requestedToolCalls))
+				toolCalls := make([]t.FnCall, 0, len(requestedToolCalls))
 				for _, openAIToolCall := range requestedToolCalls {
 					toolCall, err := o.ConvertToolCall(openAIToolCall)
 					if err != nil {
@@ -104,8 +94,10 @@ func main() {
 					}
 					toolCalls = append(toolCalls, *toolCall)
 				}
-				currentState.ToolCalls = toolCalls
+				useAnswer.ToolCalls = toolCalls
+				currentState.CurrentToolCalls = toolCalls
 			}
+			currentState.Messages = append(currentState.Messages, useAnswer)
 
 			return currentState, nil
 		}
@@ -153,7 +145,7 @@ func main() {
 		log.Fatalf("Graph validation failed: %v", err)
 	}
 
-	userInput := "What is the result of adding 15 and 27, and then dividing the sum by 3?"
+	userInput := "What is the result of adding 15 and 30, and then dividing the sum by 3?"
 	graph.Invoke(a.CreateConversation(
 		a.CreateMessage(a.User, userInput),
 	))
@@ -161,15 +153,19 @@ func main() {
 
 	for {
 		entry := <-stateMonitorCh
-		if entry.Error != nil {
-			fmt.Printf("Error during graph execution: %v\n", entry.Error)
-		} else {
-			if len(entry.NewState.Messages) > 0 {
-				fmt.Println(entry.NewState.Messages[len(entry.NewState.Messages)-1].Content)
-			}
-		}
 		if !entry.Running {
 			break
+		}
+		if entry.Error != nil {
+			fmt.Printf("Error during graph execution: %v\n", entry.Error)
+			break
+		} else {
+			if len(entry.NewState.Messages) > 0 {
+				lastMessage := entry.NewState.Messages[len(entry.NewState.Messages)-1]
+				if lastMessage.Role != a.Tool {
+					fmt.Println(lastMessage.Content)
+				}
+			}
 		}
 	}
 }

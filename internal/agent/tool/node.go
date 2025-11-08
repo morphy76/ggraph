@@ -26,8 +26,14 @@ func NodeToolFactory(name string, tools ...*t.Tool) (g.Node[a.Conversation], err
 // ------------------------------------------------------------------------------
 
 func runToolsFunc(tools ...*t.Tool) g.NodeFn[a.Conversation] {
+
+	mappedTools := make(map[string]*t.Tool)
+	for _, tool := range tools {
+		mappedTools[tool.Name] = tool
+	}
+
 	return func(userInput, currentState a.Conversation, notifyPartial g.NotifyPartialFn[a.Conversation]) (a.Conversation, error) {
-		toolCalls := currentState.ToolCalls
+		toolCalls := currentState.CurrentToolCalls
 		if len(toolCalls) == 0 || len(tools) == 0 {
 			return a.CreateConversation(), nil
 		}
@@ -39,32 +45,30 @@ func runToolsFunc(tools ...*t.Tool) g.NodeFn[a.Conversation] {
 		callState := a.CreateConversation()
 		for _, call := range toolCalls {
 			wg.Add(1)
-			go func(tc t.ToolCall) {
+			go func(tc t.FnCall) {
 				defer wg.Done()
 
-				var useTool *t.Tool
-				for _, tool := range tools {
-					if tool.Name == tc.ToolName {
-						useTool = tool
-						break
-					}
+				useTool, found := mappedTools[tc.ToolName]
+				if !found {
+					errorToolMessage := fmt.Sprintf("%s:%s", call.ID, t.ErrToolNotFound)
+					callStateMutex.Lock()
+					callState.Messages = append(callState.Messages, a.CreateMessage(a.Tool, errorToolMessage))
+					callStateMutex.Unlock()
+					return
 				}
-				// useArgs := call.ArgsAsSortedSlice(useTool)
-				// TODO this call fails for arg types
-				// rv, err := useTool.Call(useArgs...)
-				// err := errors.New("not yet implemented: tool arguments parsing")
-				rv := 10
-				// if err != nil {
-				// 	errorToolMessage := fmt.Sprintf("{\"id\": \"%s\", \"name\": \"%s\", \"error\": \"%s\"}", call.Id, useTool.Name, err)
-				// 	callStateMutex.Lock()
-				// 	callState.Messages = append(callState.Messages, a.CreateMessage(a.Tool, errorToolMessage))
-				// 	callStateMutex.Unlock()
-				// }
+				useArgs := call.ArgsAsSortedSlice(useTool)
+				rv, err := useTool.Call(useArgs...)
+				if err != nil {
+					errorToolMessage := fmt.Sprintf("%s:%s", call.ID, err)
+					callStateMutex.Lock()
+					callState.Messages = append(callState.Messages, a.CreateMessage(a.Tool, errorToolMessage))
+					callStateMutex.Unlock()
+					return
+				}
 
-				resultToolMessage := fmt.Sprintf("{\"id\": \"%s\", \"name\": \"%s\", \"result\": %v}", call.Id, useTool.Name, rv)
+				resultToolMessage := fmt.Sprintf("%s:%v", call.ID, rv)
 				callStateMutex.Lock()
-				// TODO proper response for a tool call, User role is not correct here, it has to be Tool role
-				callState.Messages = append(callState.Messages, a.CreateMessage(a.User, resultToolMessage))
+				callState.Messages = append(callState.Messages, a.CreateMessage(a.Tool, resultToolMessage))
 				callStateMutex.Unlock()
 			}(call)
 		}
@@ -77,6 +81,7 @@ func runToolsFunc(tools ...*t.Tool) g.NodeFn[a.Conversation] {
 
 func toolExecutionReducer(currentState, change a.Conversation) a.Conversation {
 	currentState.Messages = append(currentState.Messages, change.Messages...)
-	currentState.ToolCalls = change.ToolCalls
+	currentState.CurrentToolCalls = change.CurrentToolCalls
+
 	return currentState
 }
