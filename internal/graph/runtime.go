@@ -301,6 +301,7 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 				}
 
 				newState := r.replace(useThreadID, result.stateChange, result.reducer)
+
 				err := r.persistState(useThreadID)
 				if err != nil {
 					r.sendMonitorEntry(monitorNonFatalError[T](result.node.Name(), useThreadID, fmt.Errorf("state persistence error: %w", err)))

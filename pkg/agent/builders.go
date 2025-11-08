@@ -1,6 +1,8 @@
 package agent
 
-import "time"
+import (
+	"time"
+)
 
 // CreateCompletion is a helper function to create a Completion instance.
 //

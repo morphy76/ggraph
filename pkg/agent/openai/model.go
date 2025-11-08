@@ -1,9 +1,13 @@
 package openai
 
 import (
+	"encoding/json"
+	"strings"
+
 	"github.com/openai/openai-go/v3"
 
 	a "github.com/morphy76/ggraph/pkg/agent"
+	t "github.com/morphy76/ggraph/pkg/agent/tool"
 )
 
 // ConvertCompletionOptions converts internal CompletionOptions to OpenAI CompletionNewParams.
@@ -83,13 +87,48 @@ func ConvertConversationOptions(modelOptions *a.ModelOptions) openai.ChatComplet
 			union = openai.UserMessage(msg.Content)
 		case a.Assistant:
 			union = openai.AssistantMessage(msg.Content)
+			useUnion := union.OfAssistant
+			if len(msg.ToolCalls) > 0 {
+				useUnion.ToolCalls = make([]openai.ChatCompletionMessageToolCallUnionParam, len(msg.ToolCalls))
+				for i, tc := range msg.ToolCalls {
+					argsAsString, _ := json.Marshal(tc.Arguments)
+					useUnion.ToolCalls[i] = openai.ChatCompletionMessageToolCallUnionParam{
+						OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
+							ID: tc.ID,
+							Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
+								Name:      tc.ToolName,
+								Arguments: string(argsAsString),
+							},
+						},
+					}
+				}
+
+				union.OfAssistant = useUnion
+			}
+		case a.Tool:
+			toolAnswer := strings.SplitN(msg.Content, ":", 2)
+			union = openai.ToolMessage(toolAnswer[1], toolAnswer[0])
 		}
+
 		messages[i] = union
+	}
+
+	tools := make([]openai.ChatCompletionToolUnionParam, len(modelOptions.Tools))
+	for i, tool := range modelOptions.Tools {
+		fn := tool2Fn(tool)
+		tools[i] = openai.ChatCompletionToolUnionParam{
+			OfFunction: fn,
+		}
 	}
 
 	rv := openai.ChatCompletionNewParams{
 		Model:    openai.ChatModel(modelOptions.Model),
 		Messages: messages,
+	}
+
+	if len(tools) > 0 {
+		rv.ParallelToolCalls = openai.Bool(true)
+		rv.Tools = tools
 	}
 
 	if modelOptions.FrequencyPenalty != nil {
@@ -124,4 +163,46 @@ func ConvertConversationOptions(modelOptions *a.ModelOptions) openai.ChatComplet
 	}
 
 	return rv
+}
+
+func tool2Fn(tool *t.Tool) *openai.ChatCompletionFunctionToolParam {
+	toolProps := make(map[string]interface{})
+	for _, arg := range tool.Args {
+		useType := convertToSupportedJSONType(arg.Type)
+		toolProps[arg.Name] = map[string]interface{}{
+			"type": useType,
+		}
+	}
+
+	return &openai.ChatCompletionFunctionToolParam{
+		Function: openai.FunctionDefinitionParam{
+			Name:        tool.Name,
+			Description: openai.String(tool.BuildToolPrompt()),
+			Parameters: openai.FunctionParameters{
+				"type":       "object",
+				"properties": toolProps,
+				"required":   tool.RequiredArgs(),
+			},
+		},
+	}
+}
+
+func convertToSupportedJSONType(argType string) string {
+	switch argType {
+	case "string":
+		return "string"
+	case "int", "int8", "int16", "int32", "int64",
+		"uint", "uint8", "uint16", "uint32", "uint64":
+		return "integer"
+	case "float32", "float64":
+		return "number"
+	case "bool":
+		return "boolean"
+	case "[]string", "[]int", "[]float64", "[]bool":
+		return "array"
+	case "map[string]interface{}":
+		return "object"
+	default:
+		return "string"
+	}
 }

@@ -35,6 +35,34 @@ test: lint ## Run all tests with race detection and comprehensive flags
 test-bench: ## Run benchmark tests
 	@$(GO) test -v -bench=. -benchmem -timeout=60s $(PACKAGES)
 
+##@ Documentation
+.PHONY: doc doc-serve doc-install
+doc: ## Generate static documentation in Go standards format
+	@echo "Generating Go documentation..."
+	@for pkg in $(PACKAGES); do \
+		echo ""; \
+		echo "=== Package: $$pkg ==="; \
+		$(GO) doc -all $$pkg || true; \
+	done
+	@echo ""
+	@echo "✅ Documentation generated"
+	@echo "To browse documentation interactively, run: make doc-serve"
+
+doc-serve: ## Serve documentation locally using pkgsite (install with: make doc-install)
+	@if ! command -v pkgsite > /dev/null 2>&1; then \
+		echo "❌ pkgsite is not installed. Run 'make doc-install' to install it."; \
+		exit 1; \
+	fi
+	@echo "Starting documentation server at http://localhost:8080..."
+	@echo "Press Ctrl+C to stop the server"
+	@pkgsite -http=:8080
+
+doc-install: ## Install pkgsite for serving Go documentation locally
+	@echo "Installing pkgsite..."
+	@$(GO) install golang.org/x/pkgsite/cmd/pkgsite@latest
+	@echo "✅ pkgsite installed successfully"
+	@echo "Run 'make doc-serve' to start the documentation server"
+
 ##@ Cleanup
 .PHONY: clean clean-test
 clean: clean-test ## Clean all generated files
@@ -45,7 +73,7 @@ clean-test: ## Clean test artifacts (coverage files, etc.)
 	@echo "✅ Test artifacts cleaned"
 
 ##@ Graph Examples
-.PHONY: run-conditional-ex run-thread-ex run-helloworld-ex run-loop-ex run-persistence-ex run-velvet-ex run-completion-ex run-all-ex
+.PHONY: run-conditional-ex run-thread-ex run-helloworld-ex run-loop-ex run-persistence-ex run-velvet-ex run-completion-ex run-tool-ex run-all-ex
 run-conditional-ex: ## Run the conditional graph example
 	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/conditional/run.go
 run-thread-ex: ## Run the threading graph example
@@ -62,5 +90,7 @@ run-velvet-ex: ## Run the Velvet AIW educational Q&A example
 	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/velvet/run.go
 run-completion-ex: ## Run the AIW completion agent example
 	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/completion/run.go
-run-all-ex: run-conditional-ex run-thread-ex run-helloworld-ex run-loop-ex run-interrupt-ex run-persistence-ex run-velvet-ex run-completion-ex ## Run all graph examples
+run-tool-ex: ## Run the AIW tool agent example
+	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/tool/run.go
+run-all-ex: run-conditional-ex run-thread-ex run-helloworld-ex run-loop-ex run-interrupt-ex run-persistence-ex run-velvet-ex run-completion-ex run-tool-ex## Run all graph examples
 	@echo "✅ All examples executed"

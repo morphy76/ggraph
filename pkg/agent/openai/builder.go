@@ -1,6 +1,8 @@
 package openai
 
 import (
+	"fmt"
+
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 
@@ -107,6 +109,13 @@ func CreateConversationNode(
 ) (g.Node[a.Conversation], error) {
 	openAIFn := conversationNodeFn(client.Chat, model, conversationOptions...)
 
-	rv, err := b.NewNodeBuilder(name, openAIFn).Build()
+	routingPolicy, err := b.CreateConditionalRoutePolicy(a.ToolProcessorRoutingFn)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create a conversation node: %w", err)
+	}
+
+	rv, err := b.NewNodeBuilder(name, openAIFn).
+		WithRoutingPolicy(routingPolicy).
+		Build()
 	return rv, err
 }

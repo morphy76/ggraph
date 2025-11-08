@@ -1,5 +1,7 @@
 package agent
 
+import "github.com/morphy76/ggraph/pkg/agent/tool"
+
 // ModelOptions defines the parameters for generating text completions.
 type ModelOptions struct {
 	// The model to use for generating completions.
@@ -60,6 +62,8 @@ type ModelOptions struct {
 	TopP *float64
 	// A unique identifier representing your end-user.
 	User *string
+	// Tools available to the agent during the conversation.
+	Tools []*tool.Tool
 }
 
 // ModelOption defines an interface for applying options to completion requests.
@@ -342,6 +346,25 @@ func WithMaxCompletionTokens(maxCompletionTokens int64) ModelOption {
 			return ErrorInvalidMaxTokens
 		}
 		r.MaxCompletionTokens = &maxCompletionTokens
+		return nil
+	})
+}
+
+// WithTools sets the Tools option for conversation requests.
+//
+// Parameters:
+//   - tools: A variadic list of pointers to Tool instances.
+//
+// Returns:
+//   - A ConversationOption that sets the Tools parameter.
+//
+// Example usage:
+//
+//	tool1 := tool.CreateTool[string](func() (string, error) { return "tool result", nil }, "Prompt: This tool does X", "Usage: Call with Y")
+//	option := WithTools(tool1)
+func WithTools(tools ...*tool.Tool) ModelOption {
+	return ModelOptionFunc(func(r *ModelOptions) error {
+		r.Tools = tools
 		return nil
 	})
 }
