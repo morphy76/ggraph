@@ -67,30 +67,37 @@ func (n *nodeImpl[T]) Name() string {
 	return n.name
 }
 
-func (n *nodeImpl[T]) Accept(userInput T, runtime g.StateObserver[T], config g.InvokeConfig) {
+func (n *nodeImpl[T]) Accept(
+	userInput T,
+	stateObserver g.StateObserver[T],
+	nodeExecutor g.NodeExecutor,
+	config g.InvokeConfig,
+) {
 	useThreadID := config.ThreadID
 
-	go func() {
+	task := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
 		partialStateChange := func(state T) {
-			runtime.NotifyStateChange(n, config, userInput, state, n.reducer, nil, true)
+			stateObserver.NotifyStateChange(n, config, userInput, state, n.reducer, nil, true)
 		}
 
 		select {
 		case asyncDeltaState := <-n.mailbox:
-			stateChange, err := n.fn(asyncDeltaState, runtime.CurrentState(useThreadID), partialStateChange)
+			stateChange, err := n.fn(asyncDeltaState, stateObserver.CurrentState(useThreadID), partialStateChange)
 			if err != nil {
-				runtime.NotifyStateChange(n, config, userInput, stateChange, n.reducer, fmt.Errorf("error executing node %s: %w", n.name, err), false)
+				stateObserver.NotifyStateChange(n, config, userInput, stateChange, n.reducer, fmt.Errorf("error executing node %s: %w", n.name, err), false)
 				return
 			}
-			runtime.NotifyStateChange(n, config, userInput, stateChange, n.reducer, nil, false)
+			stateObserver.NotifyStateChange(n, config, userInput, stateChange, n.reducer, nil, false)
 		case <-ctx.Done():
-			runtime.NotifyStateChange(n, config, userInput, runtime.CurrentState(useThreadID), n.reducer, fmt.Errorf("error executing node %s: %w", n.name, ctx.Err()), false)
+			stateObserver.NotifyStateChange(n, config, userInput, stateObserver.CurrentState(useThreadID), n.reducer, fmt.Errorf("error executing node %s: %w", n.name, ctx.Err()), false)
 			return
 		}
-	}()
+	}
+
+	nodeExecutor.Submit(task)
 
 	n.mailbox <- userInput
 }

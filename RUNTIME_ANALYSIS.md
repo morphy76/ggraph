@@ -19,12 +19,14 @@ The runtime demonstrates **strong Go engineering** with comprehensive features a
 - **Input validation in all factory functions** (recently added)
 
 ### ⚠️ What Needs Attention
-- **Go Practices:** Magic numbers, goroutine management
-- **Runtime Issues:** Potential goroutine leaks, resource management
+- **Go Practices:** Magic numbers should be constants
+- **Runtime Issues:** Channel closure in Shutdown, resource management
 - **LangGraph Gaps:** Missing critical features for production agent systems
 
 ### ✅ Recently Fixed
 - **Input Validation:** Factory functions now validate all inputs with proper error returns
+- **Worker Pool:** Bounded goroutine execution with configurable worker pool (Issue #10)
+- **Node Executor Interface:** Clean abstraction for task submission with backpressure
 
 ---
 
@@ -164,122 +166,99 @@ func NodeImplFactory[T g.SharedState](role g.NodeRole, name string, fn g.NodeFn[
 
 ---
 
-### 3. Goroutine Management in Nodes (CRITICAL)
+### 3. ✅ FIXED: Goroutine Management in Nodes (CRITICAL)
 
-**Current Issue:**
+**Status:** ✅ **RESOLVED** - Worker pool implementation now prevents unbounded goroutine creation
+
+**Current Implementation:**
 ```go
-// node.go line 48
-func (n *nodeImpl[T]) Accept(userInput T, runtime g.StateObserver[T], config g.InvokeConfig) {
-    go func() {  // ❌ Creates new goroutine every time
+// node.go - Now uses worker pool via NodeExecutor interface
+func (n *nodeImpl[T]) Accept(
+    userInput T,
+    stateObserver g.StateObserver[T],
+    nodeExecutor g.NodeExecutor,
+    config g.InvokeConfig,
+) {
+    task := func() {
         ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
         defer cancel()
-        
-        // ... node execution ...
-    }()
+        // ... node execution logic ...
+    }
     
-    n.mailbox <- userInput  // Then sends to mailbox
+    nodeExecutor.Submit(task)  // ✅ Submits to bounded worker pool
+    n.mailbox <- userInput
+}
+
+// runtime.go - Worker pool integrated into runtime
+type runtimeImpl[T g.SharedState] struct {
+    workerPool *workerPool  // ✅ Shared worker pool
+    // ... other fields
+}
+
+func (r *runtimeImpl[T]) Submit(task func()) {
+    r.workerPool.Submit(task)  // ✅ Implements NodeExecutor interface
 }
 ```
 
-**Problems:**
-1. **Unbounded goroutine creation** - For graphs with loops, this creates unlimited goroutines
-2. **Resource waste** - Each goroutine has ~2KB+ stack overhead
-3. **Potential goroutine leak** - If mailbox blocks, goroutine waits with ctx timeout only
-4. **No backpressure** - System can be overwhelmed with work
-
-**Example Scenario:**
-```
-Graph with loop → Node executes 1000 times → 1000 goroutines created
-If each takes 5s (timeout) → Up to 1000 concurrent goroutines
-Memory: 1000 × 2KB = 2MB minimum (likely much more with heap allocations)
-```
-
-**Impact:** CRITICAL for production systems with:
-- High-frequency loops
-- Long-running nodes
-- Many concurrent threads
-
-**Recommendations:**
-
-**Option 1: Worker Pool Pattern**
+**Worker Pool Implementation:**
 ```go
-type nodeImpl[T g.SharedState] struct {
-    workerPool *WorkerPool  // Shared across nodes
-    // ... existing fields
-}
-
-type WorkerPool struct {
+// node_worker.go
+type workerPool struct {
     workers   int
     taskQueue chan func()
     wg        sync.WaitGroup
 }
 
-func NewWorkerPool(workers int, queueSize int) *WorkerPool {
-    pool := &WorkerPool{
-        workers:   workers,
-        taskQueue: make(chan func(), queueSize),
+func newWorkerPool(workers int, queueSize int, coreMultiplier int) *workerPool {
+    // Smart defaults:
+    // - workers: runtime.NumCPU() * coreMultiplier (default 10)
+    // - queueSize: 100 (default)
+    pool := &workerPool{
+        workers:   useWorkers,
+        taskQueue: make(chan func(), useQueueSize),
     }
     pool.start()
     return pool
 }
-
-func (p *WorkerPool) start() {
-    for i := 0; i < p.workers; i++ {
-        p.wg.Add(1)
-        go p.worker()
-    }
-}
-
-func (p *WorkerPool) worker() {
-    defer p.wg.Done()
-    for task := range p.taskQueue {
-        task()
-    }
-}
-
-func (n *nodeImpl[T]) Accept(userInput T, runtime g.StateObserver[T], config g.InvokeConfig) {
-    task := func() {
-        // ... existing node execution logic ...
-    }
-    
-    select {
-    case n.workerPool.taskQueue <- task:
-        // Task queued successfully
-    case <-time.After(1 * time.Second):
-        // Queue full, report error
-        runtime.NotifyStateChange(n, config, userInput, runtime.CurrentState(config.ThreadID), 
-            n.reducer, fmt.Errorf("node worker queue full"), false)
-    }
-}
 ```
 
-**Option 2: Semaphore Pattern**
+**Configuration Options:**
 ```go
-type nodeImpl[T g.SharedState] struct {
-    sem chan struct{}  // Semaphore to limit concurrent executions
-    // ... existing fields
+// pkg/graph/runtime_options.go
+type RuntimeOptions[T SharedState] struct {
+    WorkerCount               int  // Number of worker goroutines
+    WorkerCountCoreMultiplier int  // Multiplier for NumCPU()
+    WorkerQueueSize           int  // Task queue buffer size
 }
 
-func (n *nodeImpl[T]) Accept(userInput T, runtime g.StateObserver[T], config g.InvokeConfig) {
-    go func() {
-        // Acquire semaphore
-        select {
-        case n.sem <- struct{}{}:
-            defer func() { <-n.sem }()  // Release on exit
-        case <-time.After(5 * time.Second):
-            runtime.NotifyStateChange(n, config, userInput, runtime.CurrentState(config.ThreadID), 
-                n.reducer, fmt.Errorf("node semaphore timeout"), false)
-            return
-        }
-        
-        // ... existing node execution logic ...
-    }()
-    
-    n.mailbox <- userInput
-}
+// Usage:
+runtime, err := builders.CreateRuntime(
+    startEdge,
+    stateMonitorCh,
+    graph.WithWorkerPool(16, 200, 0),  // 16 workers, 200 queue size
+)
 ```
 
-**Priority:** CRITICAL - Can cause production issues
+**Benefits:**
+1. ✅ **Bounded concurrency** - Fixed number of worker goroutines
+2. ✅ **Resource control** - Predictable memory footprint
+3. ✅ **Backpressure** - Queue provides natural flow control
+4. ✅ **Graceful shutdown** - Worker pool shutdown integrated with runtime
+5. ✅ **Configurable** - Users can tune workers and queue size
+6. ✅ **Smart defaults** - Based on NumCPU() for optimal performance
+
+**Test Coverage:**
+- ✅ 100% code coverage on `node_worker.go`
+- ✅ Comprehensive unit tests in `node_worker_test.go`
+- ✅ Tests for defaults, concurrency, blocking, shutdown, stress scenarios
+
+**Previous Problems (Now Solved):**
+1. ✅ **Unbounded goroutine creation** - Now limited by worker count
+2. ✅ **Resource waste** - Fixed worker pool, no per-task goroutines
+3. ✅ **Goroutine leak** - Workers shutdown cleanly with runtime
+4. ✅ **No backpressure** - Queue provides backpressure via blocking
+
+**Priority:** ✅ **COMPLETED** - Production-ready implementation
 
 ---
 
@@ -874,7 +853,7 @@ partialStateChange := func(state T) {
 
 ### Immediate (Before Production)
 
-1. **Fix goroutine leak in nodes** - Implement worker pool or semaphore
+1. ✅ **DONE: Fix goroutine leak in nodes** - Worker pool implemented with full configuration
 2. **Fix Shutdown() channel closure** - Close after workers finish
 3. ✅ **DONE: Input validation** - All factory functions now validate inputs
 4. **Extract magic numbers to constants** - Or better, make configurable

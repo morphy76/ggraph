@@ -40,7 +40,7 @@ func newMockRuntimeNode(name string, role g.NodeRole, fn g.NodeFn[RuntimeTestSta
 	}
 }
 
-func (n *mockRuntimeNode) Accept(userInput RuntimeTestState, runtime g.StateObserver[RuntimeTestState], config g.InvokeConfig) {
+func (n *mockRuntimeNode) Accept(userInput RuntimeTestState, stateObserver g.StateObserver[RuntimeTestState], nodeExecutor g.NodeExecutor, config g.InvokeConfig) {
 	go func() {
 		n.mu.Lock()
 		n.callCount++
@@ -49,16 +49,16 @@ func (n *mockRuntimeNode) Accept(userInput RuntimeTestState, runtime g.StateObse
 		// Wait for message in mailbox
 		asyncInput := <-n.mailbox
 
-		currentState := runtime.CurrentState(config.ThreadID)
+		currentState := stateObserver.CurrentState(config.ThreadID)
 
 		if n.fn != nil {
 			newState, err := n.fn(asyncInput, currentState, func(partial RuntimeTestState) {
-				runtime.NotifyStateChange(n, config, userInput, partial, Replacer[RuntimeTestState], nil, true)
+				stateObserver.NotifyStateChange(n, config, userInput, partial, Replacer[RuntimeTestState], nil, true)
 			})
-			runtime.NotifyStateChange(n, config, userInput, newState, Replacer[RuntimeTestState], err, false)
+			stateObserver.NotifyStateChange(n, config, userInput, newState, Replacer[RuntimeTestState], err, false)
 		} else {
 			// Router node - just pass through current state
-			runtime.NotifyStateChange(n, config, userInput, currentState, Replacer[RuntimeTestState], nil, false)
+			stateObserver.NotifyStateChange(n, config, userInput, currentState, Replacer[RuntimeTestState], nil, false)
 		}
 	}()
 
