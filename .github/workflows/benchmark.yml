@@ -1,0 +1,57 @@
+name: Run Benchmarks
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to benchmark (e.g., ./internal/graph or ./... for all)'
+        required: false
+        default: './internal/graph'
+      benchtime:
+        description: 'Benchmark time (e.g., 1s, 100ms)'
+        required: false
+        default: '1s'
+      filter:
+        description: 'Benchmark filter regex (leave empty for all)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: Benchmark Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run benchmarks (all)
+        if: ${{ inputs.filter == '' }}
+        run: |
+          echo "Running benchmarks for ${{ inputs.package }}"
+          go test -bench=. -benchmem -benchtime=${{ inputs.benchtime }} -timeout=10m ${{ inputs.package }}
+
+      - name: Run benchmarks (filtered)
+        if: ${{ inputs.filter != '' }}
+        run: |
+          echo "Running benchmarks matching '${{ inputs.filter }}' for ${{ inputs.package }}"
+          go test -bench='${{ inputs.filter }}' -benchmem -benchtime=${{ inputs.benchtime }} -timeout=10m ${{ inputs.package }}
+
+      - name: Run make test-bench
+        if: ${{ inputs.package == './...' && inputs.filter == '' }}
+        run: make test-bench
