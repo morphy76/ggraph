@@ -36,7 +36,9 @@ func NewNode[T g.SharedState](name string, fn g.NodeFn[T], opts ...g.NodeOption[
 		return nil, fmt.Errorf("node creation error for name %s: %w", name, g.ErrReservedNodeName)
 	}
 
-	useOpts := &g.NodeOptions[T]{}
+	useOpts := &g.NodeOptions[T]{
+		Reducer: i.Replacer[T],
+	}
 	for _, opt := range opts {
 		opt.Apply(useOpts)
 	}
@@ -48,11 +50,6 @@ func NewNode[T g.SharedState](name string, fn g.NodeFn[T], opts ...g.NodeOption[
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	reducer := useOpts.Reducer
-	if reducer == nil {
-		reducer = i.Replacer[T]
 	}
 
 	return i.NodeImplFactory(g.IntermediateNode, name, fn, useOpts), nil
