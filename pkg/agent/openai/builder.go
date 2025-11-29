@@ -81,7 +81,7 @@ func CreateCompletionNode(
 ) (g.Node[a.Completion], error) {
 	openAIFn := completionNodeFn(client.Completions, model, completionOptions...)
 
-	rv, err := b.NewNodeBuilder(name, openAIFn).Build()
+	rv, err := b.NewNode(name, openAIFn)
 	return rv, err
 }
 
@@ -114,8 +114,7 @@ func CreateConversationNode(
 		return nil, fmt.Errorf("cannot create a conversation node: %w", err)
 	}
 
-	rv, err := b.NewNodeBuilder(name, openAIFn).
-		WithRoutingPolicy(routingPolicy).
-		Build()
+	rv, err := b.NewNode(name, openAIFn,
+		g.WithRoutingPolicy(routingPolicy))
 	return rv, err
 }

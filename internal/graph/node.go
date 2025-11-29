@@ -9,14 +9,14 @@ import (
 )
 
 // NodeImplFactory creates a new instance of Node with the specified SharedState type.
-func NodeImplFactory[T g.SharedState](role g.NodeRole, name string, fn g.NodeFn[T], routePolicy g.RoutePolicy[T], reducer g.ReducerFn[T]) g.Node[T] {
+func NodeImplFactory[T g.SharedState](role g.NodeRole, name string, fn g.NodeFn[T], opt *g.NodeOptions[T]) g.Node[T] {
 	useFn := fn
 	if useFn == nil {
 		useFn = func(userInput T, currentState T, notifyPartial g.NotifyPartialFn[T]) (T, error) {
 			return currentState, nil
 		}
 	}
-	usePolicy := routePolicy
+	usePolicy := opt.RoutingPolicy
 	if usePolicy == nil {
 		usePolicy, _ = RouterPolicyImplFactory[T](AnyRoute)
 	}
@@ -26,7 +26,7 @@ func NodeImplFactory[T g.SharedState](role g.NodeRole, name string, fn g.NodeFn[
 		fn:          useFn,
 		routePolicy: usePolicy,
 		role:        role,
-		reducer:     reducer,
+		reducer:     opt.Reducer,
 	}
 }
 

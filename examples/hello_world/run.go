@@ -16,18 +16,18 @@ type myState struct {
 
 func main() {
 
-	helloNode, err := b.NewNodeBuilder("HelloNode", func(userInput myState, currentState myState, notifyPartial g.NotifyPartialFn[myState]) (myState, error) {
+	helloNode, err := b.NewNode("HelloNode", func(userInput myState, currentState myState, notifyPartial g.NotifyPartialFn[myState]) (myState, error) {
 		currentState.Message = fmt.Sprintf("Hello %s!!!", userInput.Message)
 		return currentState, nil
-	}).Build()
+	})
 	if err != nil {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
-	goodbyeNode, err := b.NewNodeBuilder("GoodbyeNode", func(userInput myState, currentState myState, notifyPartial g.NotifyPartialFn[myState]) (myState, error) {
+	goodbyeNode, err := b.NewNode("GoodbyeNode", func(userInput myState, currentState myState, notifyPartial g.NotifyPartialFn[myState]) (myState, error) {
 		currentState.Message = fmt.Sprintf("Goodbye %s!!!", userInput.Message)
 		return currentState, nil
-	}).Build()
+	})
 	if err != nil {
 		log.Fatalf("Node creation failed: %v", err)
 	}
@@ -38,7 +38,7 @@ func main() {
 
 	initialState := myState{Message: ""}
 	stateMonitorCh := make(chan g.StateMonitorEntry[myState], 10)
-	graph, err := b.CreateRuntimeWithInitialState(startEdge, stateMonitorCh, initialState)
+	graph, err := b.CreateRuntime(startEdge, stateMonitorCh, g.WithInitialState(initialState))
 	if err != nil {
 		log.Fatalf("Runtime creation failed: %v", err)
 	}

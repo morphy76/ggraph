@@ -20,7 +20,7 @@ type pendingPersistEntry[T g.SharedState] struct {
 func RuntimeFactory[T g.SharedState](
 	startEdge g.Edge[T],
 	stateMonitorCh chan g.StateMonitorEntry[T],
-	initialState T,
+	opts *g.RuntimeOptions[T],
 ) (g.Runtime[T], error) {
 	if startEdge == nil {
 		return nil, fmt.Errorf("runtime creation failed: %w", g.ErrStartEdgeNil)
@@ -37,7 +37,7 @@ func RuntimeFactory[T g.SharedState](
 		startEdge: startEdge,
 		edges:     []g.Edge[T]{},
 
-		initialState:    initialState,
+		initialState:    opts.InitialState,
 		state:           make(map[string]T),
 		stateChangeLock: make(map[string]*sync.RWMutex),
 
@@ -49,8 +49,15 @@ func RuntimeFactory[T g.SharedState](
 
 		threadTTL: make(map[string]time.Time),
 	}
+
+	if opts.Memory != nil {
+		rv.persistFn = opts.Memory.PersistFn()
+		rv.restoreFn = opts.Memory.RestoreFn()
+
+		rv.startPersistenceWorker()
+	}
+
 	rv.start()
-	rv.startPersistenceWorker()
 	rv.startThreadEvictor()
 	return rv, nil
 }
@@ -196,11 +203,6 @@ func (r *runtimeImpl[T]) InitialState() T {
 
 func (r *runtimeImpl[T]) StartEdge() g.Edge[T] {
 	return r.startEdge
-}
-
-func (r *runtimeImpl[T]) SetMemory(memory g.Memory[T]) {
-	r.persistFn = memory.PersistFn()
-	r.restoreFn = memory.RestoreFn()
 }
 
 func (r *runtimeImpl[T]) Restore(threadID string) error {

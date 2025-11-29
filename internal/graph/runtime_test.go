@@ -119,7 +119,7 @@ func TestRuntimeFactory_BasicCreation(t *testing.T) {
 
 	initialState := RuntimeTestState{Value: "initial", Counter: 0}
 
-	runtime, err := RuntimeFactory(startEdge, stateMonitorCh, initialState)
+	runtime, err := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{InitialState: initialState})
 	if err != nil {
 		t.Fatalf("RuntimeFactory() failed: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestRuntimeFactory_NilStartEdge(t *testing.T) {
 	stateMonitorCh := make(chan g.StateMonitorEntry[RuntimeTestState], 10)
 	initialState := RuntimeTestState{Value: "initial"}
 
-	runtime, err := RuntimeFactory[RuntimeTestState](nil, stateMonitorCh, initialState)
+	runtime, err := RuntimeFactory[RuntimeTestState](nil, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{InitialState: initialState})
 	if err == nil {
 		t.Fatal("Expected error when creating runtime with nil start edge, got nil")
 	}
@@ -168,7 +168,7 @@ func TestRuntime_AddEdge(t *testing.T) {
 	edge1 := &mockRuntimeEdge{from: node1, to: node2, role: g.IntermediateEdge}
 	edge2 := &mockRuntimeEdge{from: node2, to: endNode, role: g.EndEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{})
 	defer runtime.Shutdown()
 
 	// Add edges one at a time
@@ -195,7 +195,7 @@ func TestRuntime_AddMultipleEdgesAtOnce(t *testing.T) {
 	edge1 := &mockRuntimeEdge{from: node1, to: node2, role: g.IntermediateEdge}
 	edge2 := &mockRuntimeEdge{from: node2, to: endNode, role: g.EndEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{})
 	defer runtime.Shutdown()
 
 	// Add multiple edges at once
@@ -218,7 +218,7 @@ func TestRuntime_Validate_ValidGraph(t *testing.T) {
 	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
 	endEdge := &mockRuntimeEdge{from: node1, to: endNode, role: g.EndEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{})
 	defer runtime.Shutdown()
 
 	runtime.AddEdge(endEdge)
@@ -238,7 +238,7 @@ func TestRuntime_Validate_NoPathToEnd(t *testing.T) {
 
 	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{})
 	defer runtime.Shutdown()
 
 	// No end edge added
@@ -270,7 +270,7 @@ func TestRuntime_Invoke_SimpleExecution(t *testing.T) {
 	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
 	endEdge := &mockRuntimeEdge{from: node1, to: endNode, role: g.EndEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{Counter: 0, Value: "initial"})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{InitialState: RuntimeTestState{Counter: 0, Value: "initial"}})
 	defer runtime.Shutdown()
 
 	runtime.AddEdge(endEdge)
@@ -322,7 +322,7 @@ func TestRuntime_Invoke_WithError(t *testing.T) {
 
 	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{})
 	defer runtime.Shutdown()
 
 	runtime.Invoke(RuntimeTestState{})
@@ -361,7 +361,7 @@ func TestRuntime_Invoke_ConcurrentInvocations(t *testing.T) {
 	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
 	endEdge := &mockRuntimeEdge{from: node1, to: endNode, role: g.EndEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{})
 	defer runtime.Shutdown()
 
 	runtime.AddEdge(endEdge)
@@ -408,7 +408,7 @@ func TestRuntime_CurrentState(t *testing.T) {
 	node1 := newMockRuntimeNode("Node1", g.IntermediateNode, nil, nil)
 	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{Value: "initial", Counter: 42})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{InitialState: RuntimeTestState{Value: "initial", Counter: 42}})
 	defer runtime.Shutdown()
 
 	// Cast to internal implementation to access InitialState
@@ -421,18 +421,18 @@ func TestRuntime_CurrentState(t *testing.T) {
 	}
 }
 
-var _ g.Memory[RuntimeTestState] = (*testMemory_SetPersistentState)(nil)
+var _ g.Memory[RuntimeTestState] = (*testMemorySetPersistentState)(nil)
 
-type testMemory_SetPersistentState struct {
+type testMemorySetPersistentState struct {
 }
 
-func (m *testMemory_SetPersistentState) PersistFn() g.PersistFn[RuntimeTestState] {
+func (m *testMemorySetPersistentState) PersistFn() g.PersistFn[RuntimeTestState] {
 	return func(ctx context.Context, threadID string, state RuntimeTestState) error {
 		return nil
 	}
 }
 
-func (m *testMemory_SetPersistentState) RestoreFn() g.RestoreFn[RuntimeTestState] {
+func (m *testMemorySetPersistentState) RestoreFn() g.RestoreFn[RuntimeTestState] {
 	return func(ctx context.Context, threadID string) (RuntimeTestState, error) {
 		return RuntimeTestState{Value: "restored"}, nil
 	}
@@ -446,11 +446,10 @@ func TestRuntime_SetPersistentState(t *testing.T) {
 	node1 := newMockRuntimeNode("Node1", g.IntermediateNode, nil, nil)
 	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{
+		Memory: &testMemorySetPersistentState{},
+	})
 	defer runtime.Shutdown()
-
-	runtime.SetMemory(&testMemory_SetPersistentState{})
-
 	threadID := uuid.NewString()
 
 	// Test that restore works
@@ -473,7 +472,7 @@ func TestRuntime_Restore_WithoutPersistentState(t *testing.T) {
 	node1 := newMockRuntimeNode("Node1", g.IntermediateNode, nil, nil)
 	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{})
 	defer runtime.Shutdown()
 
 	err := runtime.Restore(uuid.NewString())
@@ -482,14 +481,14 @@ func TestRuntime_Restore_WithoutPersistentState(t *testing.T) {
 	}
 }
 
-var _ g.Memory[RuntimeTestState] = (*testMemory_Persistence_StateIsPersisted)(nil)
+var _ g.Memory[RuntimeTestState] = (*testMemoryPersistenceStateIsPersisted)(nil)
 
-type testMemory_Persistence_StateIsPersisted struct {
+type testMemoryPersistenceStateIsPersisted struct {
 	persistedStates []RuntimeTestState
 	mu              sync.Mutex
 }
 
-func (m *testMemory_Persistence_StateIsPersisted) PersistFn() g.PersistFn[RuntimeTestState] {
+func (m *testMemoryPersistenceStateIsPersisted) PersistFn() g.PersistFn[RuntimeTestState] {
 	return func(ctx context.Context, threadID string, state RuntimeTestState) error {
 		m.mu.Lock()
 		m.persistedStates = append(m.persistedStates, state)
@@ -498,7 +497,7 @@ func (m *testMemory_Persistence_StateIsPersisted) PersistFn() g.PersistFn[Runtim
 	}
 }
 
-func (m *testMemory_Persistence_StateIsPersisted) RestoreFn() g.RestoreFn[RuntimeTestState] {
+func (m *testMemoryPersistenceStateIsPersisted) RestoreFn() g.RestoreFn[RuntimeTestState] {
 	return func(ctx context.Context, threadID string) (RuntimeTestState, error) {
 		return RuntimeTestState{}, nil
 	}
@@ -520,14 +519,17 @@ func TestRuntime_Persistence_StateIsPersisted(t *testing.T) {
 	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
 	endEdge := &mockRuntimeEdge{from: node1, to: endNode, role: g.EndEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{Counter: 0})
-	defer runtime.Shutdown()
-
-	memory := &testMemory_Persistence_StateIsPersisted{
+	memory := &testMemoryPersistenceStateIsPersisted{
 		persistedStates: make([]RuntimeTestState, 0),
 		mu:              sync.Mutex{},
 	}
-	runtime.SetMemory(memory)
+
+	runtime, _ := RuntimeFactory(
+		startEdge,
+		stateMonitorCh,
+		&g.RuntimeOptions[RuntimeTestState]{InitialState: RuntimeTestState{Counter: 0}, Memory: memory},
+	)
+	defer runtime.Shutdown()
 	runtime.AddEdge(endEdge)
 
 	runtime.Invoke(RuntimeTestState{})
@@ -584,7 +586,7 @@ func TestRuntime_PartialStateUpdates(t *testing.T) {
 	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
 	endEdge := &mockRuntimeEdge{from: node1, to: endNode, role: g.EndEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{})
 	defer runtime.Shutdown()
 
 	runtime.AddEdge(endEdge)
@@ -641,7 +643,7 @@ func TestRuntime_MultipleNodes(t *testing.T) {
 	edge1 := &mockRuntimeEdge{from: node1, to: node2, role: g.IntermediateEdge}
 	edge2 := &mockRuntimeEdge{from: node2, to: endNode, role: g.EndEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{Counter: 0})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{InitialState: RuntimeTestState{Counter: 0}})
 	defer runtime.Shutdown()
 
 	runtime.AddEdge(edge1, edge2)
@@ -701,7 +703,7 @@ func TestRuntime_ConditionalRouting(t *testing.T) {
 	endEdgeLeft := &mockRuntimeEdge{from: leftNode, to: endNode, role: g.EndEdge}
 	endEdgeRight := &mockRuntimeEdge{from: rightNode, to: endNode, role: g.EndEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{Counter: 0})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{InitialState: RuntimeTestState{Counter: 0}})
 	defer runtime.Shutdown()
 
 	runtime.AddEdge(leftEdge, rightEdge, endEdgeLeft, endEdgeRight)
@@ -733,7 +735,7 @@ func TestRuntime_Shutdown(t *testing.T) {
 	node1 := newMockRuntimeNode("Node1", g.IntermediateNode, nil, nil)
 	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{})
 
 	// Shutdown should not panic
 	runtime.Shutdown()
@@ -755,7 +757,7 @@ func TestRuntime_NoOutboundEdges(t *testing.T) {
 
 	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{})
 	defer runtime.Shutdown()
 
 	// Don't add any outbound edges from node1
@@ -801,7 +803,7 @@ func TestRuntime_NilRoutingPolicy(t *testing.T) {
 	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
 	endEdge := &mockRuntimeEdge{from: node1, to: endNode, role: g.EndEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{})
 	defer runtime.Shutdown()
 
 	runtime.AddEdge(endEdge)
@@ -841,7 +843,7 @@ func TestRuntime_EmptyStateMonitorChannel(t *testing.T) {
 	endEdge := &mockRuntimeEdge{from: node1, to: endNode, role: g.EndEdge}
 
 	// Create runtime without state monitor channel (nil)
-	runtime, _ := RuntimeFactory[RuntimeTestState](startEdge, nil, RuntimeTestState{})
+	runtime, _ := RuntimeFactory[RuntimeTestState](startEdge, nil, &g.RuntimeOptions[RuntimeTestState]{})
 	defer runtime.Shutdown()
 
 	runtime.AddEdge(endEdge)
@@ -880,7 +882,7 @@ func TestRuntime_NonPersistent_CompleteExecution(t *testing.T) {
 	edge1 := &mockRuntimeEdge{from: node1, to: node2, role: g.IntermediateEdge}
 	edge2 := &mockRuntimeEdge{from: node2, to: endNode, role: g.EndEdge}
 
-	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, RuntimeTestState{Counter: 0, Value: "initial"})
+	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{InitialState: RuntimeTestState{Counter: 0, Value: "initial"}})
 	defer runtime.Shutdown()
 
 	runtime.AddEdge(edge1, edge2)

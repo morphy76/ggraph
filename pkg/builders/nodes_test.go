@@ -38,17 +38,15 @@ func mockEdgeSelectionFn(userInput TestState, currentState TestState, edges []g.
 	return nil
 }
 
-// TestNewNodeBuilder_BasicCreation tests creating a new NodeBuilder with basic parameters
-func TestNewNodeBuilder_BasicCreation(t *testing.T) {
-	builder := builders.NewNodeBuilder("TestNode", mockNodeFn)
-
-	node, err := builder.Build()
+// TestNewNode_BasicCreation tests creating a new node with basic parameters
+func TestNewNode_BasicCreation(t *testing.T) {
+	node, err := builders.NewNode("TestNode", mockNodeFn)
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("NewNode() failed: %v", err)
 	}
 
 	if node == nil {
-		t.Fatal("Build() returned nil node")
+		t.Fatal("NewNode() returned nil node")
 	}
 
 	if node.Name() != "TestNode" {
@@ -60,17 +58,15 @@ func TestNewNodeBuilder_BasicCreation(t *testing.T) {
 	}
 }
 
-// TestNewNodeBuilder_WithNilFunction tests creating a NodeBuilder with nil function (for routers)
-func TestNewNodeBuilder_WithNilFunction(t *testing.T) {
-	builder := builders.NewNodeBuilder[TestState]("RouterNode", nil)
-
-	node, err := builder.Build()
+// TestNewNode_WithNilFunction tests creating a node with nil function (for routers)
+func TestNewNode_WithNilFunction(t *testing.T) {
+	node, err := builders.NewNode[TestState]("RouterNode", nil)
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("NewNode() failed: %v", err)
 	}
 
 	if node == nil {
-		t.Fatal("Build() returned nil node")
+		t.Fatal("NewNode() returned nil node")
 	}
 
 	if node.Name() != "RouterNode" {
@@ -78,19 +74,17 @@ func TestNewNodeBuilder_WithNilFunction(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_WithRoutingPolicy tests setting a custom routing policy
-func TestNodeBuilder_WithRoutingPolicy(t *testing.T) {
+// TestNode_WithRoutingPolicy tests setting a custom routing policy
+func TestNode_WithRoutingPolicy(t *testing.T) {
 	policy, err := builders.CreateConditionalRoutePolicy(mockEdgeSelectionFn)
 	if err != nil {
 		t.Fatalf("CreateConditionalRoutePolicy() failed: %v", err)
 	}
 
-	builder := builders.NewNodeBuilder("TestNode", mockNodeFn).
-		WithRoutingPolicy(policy)
-
-	node, err := builder.Build()
+	node, err := builders.NewNode("TestNode", mockNodeFn,
+		g.WithRoutingPolicy(policy))
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("NewNode() failed: %v", err)
 	}
 
 	if node.RoutePolicy() == nil {
@@ -103,18 +97,16 @@ func TestNodeBuilder_WithRoutingPolicy(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_WithReducer tests setting a custom reducer function
-func TestNodeBuilder_WithReducer(t *testing.T) {
-	builder := builders.NewNodeBuilder("TestNode", mockNodeFn).
-		WithReducer(mockReducer)
-
-	node, err := builder.Build()
+// TestNode_WithReducer tests setting a custom reducer function
+func TestNode_WithReducer(t *testing.T) {
+	node, err := builders.NewNode("TestNode", mockNodeFn,
+		g.WithReducer(mockReducer))
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("NewNode() failed: %v", err)
 	}
 
 	if node == nil {
-		t.Fatal("Build() returned nil node")
+		t.Fatal("NewNode() returned nil node")
 	}
 
 	// We can't directly test the reducer, but we can verify the node was created successfully
@@ -123,21 +115,19 @@ func TestNodeBuilder_WithReducer(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_ChainedConfiguration tests chaining multiple configuration methods
-func TestNodeBuilder_ChainedConfiguration(t *testing.T) {
+// TestNode_MultipleOptions tests using multiple configuration options
+func TestNode_MultipleOptions(t *testing.T) {
 	policy, _ := builders.CreateAnyRoutePolicy[TestState]()
 
-	builder := builders.NewNodeBuilder("TestNode", mockNodeFn).
-		WithRoutingPolicy(policy).
-		WithReducer(mockReducer)
-
-	node, err := builder.Build()
+	node, err := builders.NewNode("TestNode", mockNodeFn,
+		g.WithRoutingPolicy(policy),
+		g.WithReducer(mockReducer))
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("NewNode() failed: %v", err)
 	}
 
 	if node == nil {
-		t.Fatal("Build() returned nil node")
+		t.Fatal("NewNode() returned nil node")
 	}
 
 	if node.Name() != "TestNode" {
@@ -149,13 +139,11 @@ func TestNodeBuilder_ChainedConfiguration(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_DefaultRoutingPolicy tests that a default routing policy is set when none is provided
-func TestNodeBuilder_DefaultRoutingPolicy(t *testing.T) {
-	builder := builders.NewNodeBuilder("TestNode", mockNodeFn)
-
-	node, err := builder.Build()
+// TestNode_DefaultRoutingPolicy tests that a default routing policy is set when none is provided
+func TestNode_DefaultRoutingPolicy(t *testing.T) {
+	node, err := builders.NewNode("TestNode", mockNodeFn)
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("NewNode() failed: %v", err)
 	}
 
 	if node.RoutePolicy() == nil {
@@ -163,11 +151,9 @@ func TestNodeBuilder_DefaultRoutingPolicy(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_ReservedNameStart tests that using the reserved StartNode name fails
-func TestNodeBuilder_ReservedNameStart(t *testing.T) {
-	builder := builders.NewNodeBuilder(builders.ReservedNodeNameStart, mockNodeFn)
-
-	node, err := builder.Build()
+// TestNode_ReservedNameStart tests that using the reserved StartNode name fails
+func TestNode_ReservedNameStart(t *testing.T) {
+	node, err := builders.NewNode(builders.ReservedNodeNameStart, mockNodeFn)
 	if err == nil {
 		t.Fatal("Expected error when using reserved name 'StartNode', got nil")
 	}
@@ -182,11 +168,9 @@ func TestNodeBuilder_ReservedNameStart(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_ReservedNameEnd tests that using the reserved EndNode name fails
-func TestNodeBuilder_ReservedNameEnd(t *testing.T) {
-	builder := builders.NewNodeBuilder(builders.ReservedNodeNameEnd, mockNodeFn)
-
-	node, err := builder.Build()
+// TestNode_ReservedNameEnd tests that using the reserved EndNode name fails
+func TestNode_ReservedNameEnd(t *testing.T) {
+	node, err := builders.NewNode(builders.ReservedNodeNameEnd, mockNodeFn)
 	if err == nil {
 		t.Fatal("Expected error when using reserved name 'EndNode', got nil")
 	}
@@ -201,18 +185,16 @@ func TestNodeBuilder_ReservedNameEnd(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_EmptyName tests creating a node with an empty name
-func TestNodeBuilder_EmptyName(t *testing.T) {
-	builder := builders.NewNodeBuilder("", mockNodeFn)
-
-	node, err := builder.Build()
+// TestNode_EmptyName tests creating a node with an empty name
+func TestNode_EmptyName(t *testing.T) {
+	node, err := builders.NewNode("", mockNodeFn)
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("NewNode() failed: %v", err)
 	}
 
 	// Empty names are allowed (not reserved)
 	if node == nil {
-		t.Fatal("Build() returned nil node")
+		t.Fatal("NewNode() returned nil node")
 	}
 
 	if node.Name() != "" {
@@ -220,8 +202,8 @@ func TestNodeBuilder_EmptyName(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_DifferentStateTypes tests NodeBuilder with different state types
-func TestNodeBuilder_DifferentStateTypes(t *testing.T) {
+// TestNode_DifferentStateTypes tests NewNode with different state types
+func TestNode_DifferentStateTypes(t *testing.T) {
 	tests := []struct {
 		name        string
 		stateName   string
@@ -236,7 +218,7 @@ func TestNodeBuilder_DifferentStateTypes(t *testing.T) {
 				nodeFn := func(userInput IntState, currentState IntState, notify g.NotifyPartialFn[IntState]) (IntState, error) {
 					return currentState, nil
 				}
-				return builders.NewNodeBuilder("IntNode", nodeFn).Build()
+				return builders.NewNode("IntNode", nodeFn)
 			},
 			expectedErr: false,
 		},
@@ -248,7 +230,7 @@ func TestNodeBuilder_DifferentStateTypes(t *testing.T) {
 				nodeFn := func(userInput StringState, currentState StringState, notify g.NotifyPartialFn[StringState]) (StringState, error) {
 					return currentState, nil
 				}
-				return builders.NewNodeBuilder("StringNode", nodeFn).Build()
+				return builders.NewNode("StringNode", nodeFn)
 			},
 			expectedErr: false,
 		},
@@ -265,7 +247,7 @@ func TestNodeBuilder_DifferentStateTypes(t *testing.T) {
 				nodeFn := func(userInput ComplexState, currentState ComplexState, notify g.NotifyPartialFn[ComplexState]) (ComplexState, error) {
 					return currentState, nil
 				}
-				return builders.NewNodeBuilder("ComplexNode", nodeFn).Build()
+				return builders.NewNode("ComplexNode", nodeFn)
 			},
 			expectedErr: false,
 		},
@@ -290,25 +272,23 @@ func TestNodeBuilder_DifferentStateTypes(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_MultipleBuildsFromSameBuilder tests that the builder pattern works correctly
-func TestNodeBuilder_MultipleBuildsFromSameBuilder(t *testing.T) {
-	baseBuilder := builders.NewNodeBuilder("TestNode", mockNodeFn)
-
-	// First build
-	node1, err1 := baseBuilder.Build()
+// TestNode_MultipleCalls tests creating multiple nodes with the same options
+func TestNode_MultipleCalls(t *testing.T) {
+	// First creation
+	node1, err1 := builders.NewNode("TestNode", mockNodeFn)
 	if err1 != nil {
-		t.Fatalf("First Build() failed: %v", err1)
+		t.Fatalf("First NewNode() failed: %v", err1)
 	}
 
-	// Second build from same builder
-	node2, err2 := baseBuilder.Build()
+	// Second creation with same parameters
+	node2, err2 := builders.NewNode("TestNode", mockNodeFn)
 	if err2 != nil {
-		t.Fatalf("Second Build() failed: %v", err2)
+		t.Fatalf("Second NewNode() failed: %v", err2)
 	}
 
 	// Both should be valid but separate instances
 	if node1 == nil || node2 == nil {
-		t.Fatal("One or both builds returned nil")
+		t.Fatal("One or both nodes returned nil")
 	}
 
 	if node1.Name() != node2.Name() {
@@ -316,27 +296,25 @@ func TestNodeBuilder_MultipleBuildsFromSameBuilder(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_ModifyingBuilderAfterBuild tests that modifying builder after Build doesn't affect previous builds
-func TestNodeBuilder_ModifyingBuilderAfterBuild(t *testing.T) {
-	builder := builders.NewNodeBuilder("Node1", mockNodeFn)
-
-	node1, err := builder.Build()
+// TestNode_DifferentConfigurations tests creating nodes with different configurations
+func TestNode_DifferentConfigurations(t *testing.T) {
+	node1, err := builders.NewNode("Node1", mockNodeFn)
 	if err != nil {
-		t.Fatalf("First Build() failed: %v", err)
+		t.Fatalf("First NewNode() failed: %v", err)
 	}
 
-	// Modify builder with different reducer
+	// Create node with different configuration
 	policy, _ := builders.CreateConditionalRoutePolicy(mockEdgeSelectionFn)
-	builder = builder.WithRoutingPolicy(policy).WithReducer(mockReducer)
-
-	node2, err := builder.Build()
+	node2, err := builders.NewNode("Node1", mockNodeFn,
+		g.WithRoutingPolicy(policy),
+		g.WithReducer(mockReducer))
 	if err != nil {
-		t.Fatalf("Second Build() failed: %v", err)
+		t.Fatalf("Second NewNode() failed: %v", err)
 	}
 
 	// Both nodes should be valid
 	if node1 == nil || node2 == nil {
-		t.Fatal("One or both builds returned nil")
+		t.Fatal("One or both nodes returned nil")
 	}
 
 	// Names should match
@@ -345,18 +323,16 @@ func TestNodeBuilder_ModifyingBuilderAfterBuild(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_NilReducerUsesDefault tests that nil reducer falls back to default
-func TestNodeBuilder_NilReducerUsesDefault(t *testing.T) {
-	builder := builders.NewNodeBuilder("TestNode", mockNodeFn).
-		WithReducer(nil)
-
-	node, err := builder.Build()
+// TestNode_NilReducerUsesDefault tests that nil reducer falls back to default
+func TestNode_NilReducerUsesDefault(t *testing.T) {
+	node, err := builders.NewNode("TestNode", mockNodeFn,
+		g.WithReducer[TestState](nil))
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("NewNode() failed: %v", err)
 	}
 
 	if node == nil {
-		t.Fatal("Build() returned nil node")
+		t.Fatal("NewNode() returned nil node")
 	}
 
 	// The node should still be created with a default reducer
@@ -365,18 +341,16 @@ func TestNodeBuilder_NilReducerUsesDefault(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_NilRoutingPolicyUsesDefault tests that nil routing policy falls back to default
-func TestNodeBuilder_NilRoutingPolicyUsesDefault(t *testing.T) {
-	builder := builders.NewNodeBuilder("TestNode", mockNodeFn).
-		WithRoutingPolicy(nil)
-
-	node, err := builder.Build()
+// TestNode_NilRoutingPolicyUsesDefault tests that nil routing policy falls back to default
+func TestNode_NilRoutingPolicyUsesDefault(t *testing.T) {
+	node, err := builders.NewNode("TestNode", mockNodeFn,
+		g.WithRoutingPolicy[TestState](nil))
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("NewNode() failed: %v", err)
 	}
 
 	if node == nil {
-		t.Fatal("Build() returned nil node")
+		t.Fatal("NewNode() returned nil node")
 	}
 
 	// Should have a default routing policy
@@ -385,25 +359,23 @@ func TestNodeBuilder_NilRoutingPolicyUsesDefault(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_CompleteConfiguration tests a fully configured node
-func TestNodeBuilder_CompleteConfiguration(t *testing.T) {
+// TestNode_CompleteConfiguration tests a fully configured node
+func TestNode_CompleteConfiguration(t *testing.T) {
 	policy, err := builders.CreateConditionalRoutePolicy(mockEdgeSelectionFn)
 	if err != nil {
 		t.Fatalf("CreateConditionalRoutePolicy() failed: %v", err)
 	}
 
-	builder := builders.NewNodeBuilder("CompleteNode", mockNodeFn).
-		WithRoutingPolicy(policy).
-		WithReducer(mockReducer)
-
-	node, err := builder.Build()
+	node, err := builders.NewNode("CompleteNode", mockNodeFn,
+		g.WithRoutingPolicy(policy),
+		g.WithReducer(mockReducer))
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("NewNode() failed: %v", err)
 	}
 
 	// Verify all properties
 	if node == nil {
-		t.Fatal("Build() returned nil node")
+		t.Fatal("NewNode() returned nil node")
 	}
 
 	if node.Name() != "CompleteNode" {
@@ -423,15 +395,13 @@ func TestNodeBuilder_CompleteConfiguration(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_LongNodeName tests creating a node with a very long name
-func TestNodeBuilder_LongNodeName(t *testing.T) {
+// TestNode_LongNodeName tests creating a node with a very long name
+func TestNode_LongNodeName(t *testing.T) {
 	longName := "ThisIsAVeryLongNodeNameThatExceedsNormalExpectationsButShouldStillBeValidBecauseThereIsNoLengthRestrictionOnNodeNames"
 
-	builder := builders.NewNodeBuilder(longName, mockNodeFn)
-
-	node, err := builder.Build()
+	node, err := builders.NewNode(longName, mockNodeFn)
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("NewNode() failed: %v", err)
 	}
 
 	if node.Name() != longName {
@@ -439,8 +409,8 @@ func TestNodeBuilder_LongNodeName(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_SpecialCharactersInName tests node names with special characters
-func TestNodeBuilder_SpecialCharactersInName(t *testing.T) {
+// TestNode_SpecialCharactersInName tests node names with special characters
+func TestNode_SpecialCharactersInName(t *testing.T) {
 	names := []string{
 		"Node-With-Dashes",
 		"Node_With_Underscores",
@@ -452,11 +422,9 @@ func TestNodeBuilder_SpecialCharactersInName(t *testing.T) {
 
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
-			builder := builders.NewNodeBuilder(name, mockNodeFn)
-
-			node, err := builder.Build()
+			node, err := builders.NewNode(name, mockNodeFn)
 			if err != nil {
-				t.Fatalf("Build() failed for name '%s': %v", name, err)
+				t.Fatalf("NewNode() failed for name '%s': %v", name, err)
 			}
 
 			if node.Name() != name {
@@ -466,8 +434,8 @@ func TestNodeBuilder_SpecialCharactersInName(t *testing.T) {
 	}
 }
 
-// TestNodeBuilder_RouterPattern tests creating a router-style node (nil function)
-func TestNodeBuilder_RouterPattern(t *testing.T) {
+// TestNode_RouterPattern tests creating a router-style node (nil function)
+func TestNode_RouterPattern(t *testing.T) {
 	selectionFn := func(userInput TestState, currentState TestState, edges []g.Edge[TestState]) g.Edge[TestState] {
 		// Select based on state value
 		for _, edge := range edges {
@@ -484,16 +452,14 @@ func TestNodeBuilder_RouterPattern(t *testing.T) {
 	}
 
 	// Router nodes have nil function
-	builder := builders.NewNodeBuilder[TestState]("ConditionalRouter", nil).
-		WithRoutingPolicy(policy)
-
-	node, err := builder.Build()
+	node, err := builders.NewNode[TestState]("ConditionalRouter", nil,
+		g.WithRoutingPolicy(policy))
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("NewNode() failed: %v", err)
 	}
 
 	if node == nil {
-		t.Fatal("Build() returned nil node")
+		t.Fatal("NewNode() returned nil node")
 	}
 
 	if node.Name() != "ConditionalRouter" {

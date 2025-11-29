@@ -195,21 +195,6 @@ type StateObserver[T SharedState] interface {
 // handle long-running workflows, and implement checkpoint/resume patterns. It is
 // embedded in the Runtime interface to provide persistence capabilities.
 type Persistent[T SharedState] interface {
-	// SetMemory configures the in-memory state management for the runtime.
-	//
-	// This method allows the runtime to use a custom memory implementation
-	// for tracking state during execution. It should be called before invoking
-	// the graph if a specific memory strategy is required.
-	//
-	// Parameters:
-	//   - memory: The Memory implementation to use for state management.
-	//
-	// Example:
-	//
-	//	memory := NewInMemory[T]()
-	//	runtime.SetMemory(memory)
-	SetMemory(memory Memory[T])
-
 	// Restore loads and applies previously persisted state to the runtime.
 	//
 	// This method should be called before Invoke() to restore the state from

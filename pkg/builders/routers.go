@@ -34,9 +34,8 @@ import (
 //	})
 //	router, err := CreateRouter[MyState]("scoreRouter", policy)
 func CreateRouter[T g.SharedState](name string, policy g.RoutePolicy[T]) (g.Node[T], error) {
-	return NewNodeBuilder[T](name, nil).
-		WithRoutingPolicy(policy).
-		Build()
+	return NewNode(name, nil,
+		g.WithRoutingPolicy(policy))
 }
 
 // CreateAnyRoutePolicy creates a default routing policy that allows any available edge.

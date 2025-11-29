@@ -8,7 +8,7 @@ import (
 )
 
 // MemMemoryFactory creates an in-memory Memory implementation.
-func MemMemoryFactory[T g.SharedState]() g.Memory[T] {
+func MemMemoryFactory[T g.SharedState](opts *g.MemoryOptions) g.Memory[T] {
 	return &memMemory[T]{
 		store: make(map[string]T),
 		mu:    &sync.RWMutex{},
