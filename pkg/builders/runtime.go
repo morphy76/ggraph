@@ -24,6 +24,7 @@ import (
 //     the entry point of the graph workflow.
 //   - stateMonitorCh: A buffered channel that receives state monitoring entries during
 //     execution. Use a buffer size appropriate for your graph complexity (e.g., 10-100).
+//   - opts: Optional configuration options for the runtime.
 //
 // Returns:
 //   - A new Runtime instance ready to execute the graph workflow.
@@ -45,72 +46,16 @@ import (
 func CreateRuntime[T g.SharedState](
 	startEdge g.Edge[T],
 	stateMonitorCh chan g.StateMonitorEntry[T],
+	opts ...g.RuntimeOption[T],
 ) (g.Runtime[T], error) {
-	var zero T
-	return CreateRuntimeWithInitialState(startEdge, stateMonitorCh, zero)
-}
 
-// CreateRuntimeWithInitialState creates a new graph runtime with a custom initial state.
-//
-// This function creates a runtime with a pre-populated initial state, which is useful
-// when you want to establish default values, configuration, or context that should be
-// available before the first node executes. The initial state is merged with or used
-// alongside the userInput provided to the Invoke method.
-//
-// The runtime manages the complete lifecycle of graph execution:
-//   - Maintains the current state throughout execution
-//   - Routes execution through nodes based on edges and routing policies
-//   - Monitors and reports state changes via the monitoring channel
-//   - Handles errors and ensures graceful shutdown
-//
-// Type Parameters:
-//   - T: The SharedState type that will be passed through the graph execution.
-//
-// Parameters:
-//   - startEdge: The edge that connects to the first operational node. This defines
-//     the entry point of the graph workflow.
-//   - stateMonitorCh: A buffered channel that receives state monitoring entries during
-//     execution. Each entry contains the node name, previous state, current state,
-//     error (if any), and execution status flags.
-//   - initialState: The starting state value for the graph. This state is available
-//     when the first node begins execution.
-//
-// Returns:
-//   - A new Runtime instance configured with the initial state.
-//   - An error if the runtime cannot be created.
-//
-// Example:
-//
-//	initialState := MyState{
-//	    Config: "production",
-//	    Counter: 0,
-//	    Data: make(map[string]string),
-//	}
-//	stateMonitorCh := make(chan StateMonitorEntry[MyState], 10)
-//	runtime, err := CreateRuntimeWithInitialState(startEdge, stateMonitorCh, initialState)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	defer runtime.Shutdown()
-//
-//	runtime.AddEdge(edge1, edge2)
-//	if err := runtime.Validate(); err != nil {
-//	    log.Fatal(err)
-//	}
-//
-//	runtime.Invoke(MyState{UserInput: "request data"})
-//
-//	// Monitor execution
-//	for entry := range stateMonitorCh {
-//	    fmt.Printf("Node: %s, Running: %v\n", entry.Node, entry.Running)
-//	    if !entry.Running {
-//	        break
-//	    }
-//	}
-func CreateRuntimeWithInitialState[T g.SharedState](
-	startEdge g.Edge[T],
-	stateMonitorCh chan g.StateMonitorEntry[T],
-	initialState T,
-) (g.Runtime[T], error) {
-	return i.RuntimeFactory(startEdge, stateMonitorCh, initialState)
+	var zeroState T
+	useOpts := &g.RuntimeOptions[T]{
+		InitialState: zeroState,
+	}
+	for _, opt := range opts {
+		opt.Apply(useOpts)
+	}
+
+	return i.RuntimeFactory(startEdge, stateMonitorCh, useOpts)
 }

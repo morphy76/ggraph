@@ -16,20 +16,23 @@ type MemoryTestState struct {
 }
 
 func TestMemMemoryFactory(t *testing.T) {
+
+	emptyOpts := &g.MemoryOptions{}
+
 	t.Run("creates memory instance", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		if memory == nil {
 			t.Fatal("MemMemoryFactory returned nil")
 		}
 	})
 
 	t.Run("implements Memory interface", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		var _ g.Memory[MemoryTestState] = memory
 	})
 
 	t.Run("returns valid PersistFn", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		persistFn := memory.PersistFn()
 		if persistFn == nil {
 			t.Fatal("PersistFn returned nil")
@@ -37,7 +40,7 @@ func TestMemMemoryFactory(t *testing.T) {
 	})
 
 	t.Run("returns valid RestoreFn", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		restoreFn := memory.RestoreFn()
 		if restoreFn == nil {
 			t.Fatal("RestoreFn returned nil")
@@ -46,8 +49,11 @@ func TestMemMemoryFactory(t *testing.T) {
 }
 
 func TestMemMemory_PersistAndRestore(t *testing.T) {
+
+	emptyOpts := &g.MemoryOptions{}
+
 	t.Run("persists and restores simple state", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		ctx := context.Background()
 		key := "test-key"
 
@@ -80,7 +86,7 @@ func TestMemMemory_PersistAndRestore(t *testing.T) {
 	})
 
 	t.Run("persists and restores state with nested data", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		ctx := context.Background()
 		key := "nested-key"
 
@@ -123,7 +129,7 @@ func TestMemMemory_PersistAndRestore(t *testing.T) {
 	})
 
 	t.Run("restores zero value for non-existent key", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		ctx := context.Background()
 		key := "non-existent-key"
 
@@ -144,7 +150,7 @@ func TestMemMemory_PersistAndRestore(t *testing.T) {
 	})
 
 	t.Run("restores zero value before any persist", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		ctx := context.Background()
 		key := "empty-key"
 
@@ -168,7 +174,7 @@ func TestMemMemory_PersistAndRestore(t *testing.T) {
 	})
 
 	t.Run("overwrites existing state with same key", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		ctx := context.Background()
 		key := "overwrite-key"
 
@@ -204,8 +210,11 @@ func TestMemMemory_PersistAndRestore(t *testing.T) {
 }
 
 func TestMemMemory_MultipleKeys(t *testing.T) {
+
+	emptyOpts := &g.MemoryOptions{}
+
 	t.Run("handles multiple keys independently", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		ctx := context.Background()
 
 		// Persist multiple states with different keys
@@ -242,8 +251,11 @@ func TestMemMemory_MultipleKeys(t *testing.T) {
 }
 
 func TestMemMemory_ContextPropagation(t *testing.T) {
+
+	emptyOpts := &g.MemoryOptions{}
+
 	t.Run("persist respects context", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		ctx := context.Background()
 		key := "context-key"
 
@@ -268,7 +280,7 @@ func TestMemMemory_ContextPropagation(t *testing.T) {
 	})
 
 	t.Run("restore respects context", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		ctx := context.Background()
 		key := "context-restore-key"
 
@@ -294,8 +306,11 @@ func TestMemMemory_ContextPropagation(t *testing.T) {
 }
 
 func TestMemMemory_EmptyKey(t *testing.T) {
+
+	emptyOpts := &g.MemoryOptions{}
+
 	t.Run("handles empty string key", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		ctx := context.Background()
 		key := ""
 
@@ -325,8 +340,11 @@ func TestMemMemory_EmptyKey(t *testing.T) {
 }
 
 func TestMemMemory_ZeroValueState(t *testing.T) {
+
+	emptyOpts := &g.MemoryOptions{}
+
 	t.Run("persists and restores zero value state", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		ctx := context.Background()
 		key := "zero-value-key"
 
@@ -359,8 +377,11 @@ func TestMemMemory_ZeroValueState(t *testing.T) {
 }
 
 func TestMemMemory_Concurrent(t *testing.T) {
+
+	emptyOpts := &g.MemoryOptions{}
+
 	t.Run("handles concurrent persist and restore operations", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		ctx := context.Background()
 
 		const goroutines = 10
@@ -401,7 +422,7 @@ func TestMemMemory_Concurrent(t *testing.T) {
 	})
 
 	t.Run("handles concurrent operations on different keys", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[MemoryTestState]()
+		memory := graph.MemMemoryFactory[MemoryTestState](emptyOpts)
 		ctx := context.Background()
 
 		const goroutines = 10
@@ -458,8 +479,11 @@ type AnotherSimpleState struct {
 }
 
 func TestMemMemory_DifferentStateType(t *testing.T) {
+
+	emptyOpts := &g.MemoryOptions{}
+
 	t.Run("works with different state type", func(t *testing.T) {
-		memory := graph.MemMemoryFactory[AnotherSimpleState]()
+		memory := graph.MemMemoryFactory[AnotherSimpleState](emptyOpts)
 		ctx := context.Background()
 		key := "simple-key"
 

@@ -23,26 +23,26 @@ type gameState struct {
 
 func main() {
 	// Node 1: Determine target number
-	initNode, _ := b.NewNodeBuilder("InitNode", func(userInput gameState, currentState gameState, notifyPartial g.NotifyPartialFn[gameState]) (gameState, error) {
+	initNode, _ := b.NewNode("InitNode", func(userInput gameState, currentState gameState, notifyPartial g.NotifyPartialFn[gameState]) (gameState, error) {
 		currentState.Target = rand.Intn(100) + 1
 		currentState.Tries = 0
 		currentState.Low = 1
 		currentState.High = 100
 		fmt.Printf("🎯 Target set (hidden)\n")
 		return currentState, nil
-	}).Build()
+	})
 
 	// Node 2: Make a guess using binary search
-	guessNode, _ := b.NewNodeBuilder("GuessNode", func(userInput gameState, currentState gameState, notifyPartial g.NotifyPartialFn[gameState]) (gameState, error) {
+	guessNode, _ := b.NewNode("GuessNode", func(userInput gameState, currentState gameState, notifyPartial g.NotifyPartialFn[gameState]) (gameState, error) {
 		currentState.Tries++
 		currentState.Guess = (currentState.Low + currentState.High) / 2
 		currentState.Success = (currentState.Guess == currentState.Target)
 		fmt.Printf("🤔 Try #%d: Guessed %d (range: %d-%d)\n", currentState.Tries, currentState.Guess, currentState.Low, currentState.High)
 		return currentState, nil
-	}).Build()
+	})
 
 	// Node 3: Provide hint and adjust range
-	hintNode, _ := b.NewNodeBuilder("HintNode", func(userInput gameState, currentState gameState, notifyPartial g.NotifyPartialFn[gameState]) (gameState, error) {
+	hintNode, _ := b.NewNode("HintNode", func(userInput gameState, currentState gameState, notifyPartial g.NotifyPartialFn[gameState]) (gameState, error) {
 		if currentState.Guess < currentState.Target {
 			currentState.Low = currentState.Guess + 1
 			currentState.Hint = "higher"
@@ -53,7 +53,7 @@ func main() {
 			fmt.Printf("💡 Hint: Try lower!\n")
 		}
 		return currentState, nil
-	}).Build()
+	})
 
 	// Router: Check success
 	routingPolicy, _ := b.CreateConditionalRoutePolicy(func(userInput, currentState gameState, edges []g.Edge[gameState]) g.Edge[gameState] {

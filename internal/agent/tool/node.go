@@ -12,9 +12,8 @@ import (
 
 // NodeToolFactory creates a new instance of a Node capable of processing tool calls within an agent conversation.
 func NodeToolFactory(name string, tools ...*t.Tool) (g.Node[a.Conversation], error) {
-	rv, err := b.NewNodeBuilder(name, runToolsFunc(tools...)).
-		WithReducer(toolExecutionReducer).
-		Build()
+	rv, err := b.NewNode(name, runToolsFunc(tools...),
+		g.WithReducer(toolExecutionReducer))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the tool executor node: %w", err)
 	}

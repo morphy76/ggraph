@@ -33,25 +33,25 @@ func main() {
 		log.Fatalf("Router creation failed: %v", err)
 	}
 
-	adder, err := b.NewNodeBuilder("Adder", func(userInput myState, currentState myState, notifyPartial g.NotifyPartialFn[myState]) (myState, error) {
+	adder, err := b.NewNode("Adder", func(userInput myState, currentState myState, notifyPartial g.NotifyPartialFn[myState]) (myState, error) {
 		currentState.Result = currentState.Result + userInput.num2
 		return currentState, nil
-	}).Build()
+	})
 	if err != nil {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
-	subtractor, err := b.NewNodeBuilder("Subtractor", func(userInput myState, currentState myState, notifyPartial g.NotifyPartialFn[myState]) (myState, error) {
+	subtractor, err := b.NewNode("Subtractor", func(userInput myState, currentState myState, notifyPartial g.NotifyPartialFn[myState]) (myState, error) {
 		currentState.Result = currentState.Result - userInput.num2
 		return currentState, nil
-	}).Build()
+	})
 	if err != nil {
 		log.Fatalf("Node creation failed: %v", err)
 	}
 
 	startEdge := b.CreateStartEdge(routerNode)
 	stateMonitorCh := make(chan g.StateMonitorEntry[myState], 10)
-	myGraph, err := b.CreateRuntimeWithInitialState(startEdge, stateMonitorCh, myState{Result: 10})
+	myGraph, err := b.CreateRuntime(startEdge, stateMonitorCh, g.WithInitialState(myState{Result: 10}))
 	if err != nil {
 		log.Fatalf("Runtime creation failed: %v", err)
 	}

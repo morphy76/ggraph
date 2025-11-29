@@ -14,71 +14,13 @@ const (
 	ReservedNodeNameEnd string = "EndNode"
 )
 
-// NodeBuilder is a builder for creating nodes with customizable properties.
-type NodeBuilder[T g.SharedState] struct {
-	name          string
-	fn            g.NodeFn[T]
-	routingPolicy g.RoutePolicy[T]
-	reducer       g.ReducerFn[T]
-}
-
-// NewNodeBuilder creates a new NodeBuilder with the specified name and processing function.
+// NewNode creates a new node with the specified name, processing function, and options.
 //
-// It initializes the NodeBuilder with default values for routing policy and reducer.
+// It initializes the node with default values for any options not provided.
 // Parameters:
 //   - name: The unique name for the node.
 //   - fn: The processing function (NodeFn) for the node.
-//
-// Returns:
-//   - A new instance of NodeBuilder[T].
-//
-// Example:
-//
-//	builder := builders.NewNodeBuilder("MyNode", myNodeFunction)
-func NewNodeBuilder[T g.SharedState](name string, fn g.NodeFn[T]) NodeBuilder[T] {
-	return NodeBuilder[T]{
-		name: name,
-		fn:   fn,
-	}
-}
-
-// WithRoutingPolicy sets a custom routing policy for the node.
-//
-// Parameters:
-//   - policy: The RoutePolicy to use for routing decisions.
-//
-// Returns:
-//   - The updated NodeBuilder[T] with the specified routing policy.
-//
-// Example:
-//
-//	builder := builders.NewNodeBuilder("MyNode", myNodeFunction).
-//	              WithRoutingPolicy(myRoutingPolicy)
-func (b NodeBuilder[T]) WithRoutingPolicy(policy g.RoutePolicy[T]) NodeBuilder[T] {
-	b.routingPolicy = policy
-	return b
-}
-
-// WithReducer sets a custom state reducer function for the node.
-//
-// Parameters:
-//   - reducer: The ReducerFn to use for combining state updates.
-//
-// Returns:
-//   - The updated NodeBuilder[T] with the specified reducer function.
-//
-// Example:
-//
-//	builder := builders.NewNodeBuilder("MyNode", myNodeFunction).
-//	              WithReducer(myReducerFunction)
-func (b NodeBuilder[T]) WithReducer(reducer g.ReducerFn[T]) NodeBuilder[T] {
-	b.reducer = reducer
-	return b
-}
-
-// Build constructs the Node[T] instance based on the configured properties.
-//
-// It uses default values for any properties that were not explicitly set.
+//   - opts: Optional configuration options for the node.
 //
 // Returns:
 //   - The constructed Node[T] instance.
@@ -86,15 +28,22 @@ func (b NodeBuilder[T]) WithReducer(reducer g.ReducerFn[T]) NodeBuilder[T] {
 //
 // Example:
 //
-//	node := builders.NewNodeBuilder("MyNode", myNodeFunction).
-//	            WithRoutingPolicy(myRoutingPolicy).
-//	            WithReducer(myReducerFunction).
-//	            Build()
-func (b NodeBuilder[T]) Build() (g.Node[T], error) {
-	if b.name == ReservedNodeNameStart || b.name == ReservedNodeNameEnd {
-		return nil, fmt.Errorf("node creation error for name %s: %w", b.name, g.ErrReservedNodeName)
+//	node, err := builders.NewNode("MyNode", myNodeFunction,
+//	    builders.WithRoutingPolicy(myRoutingPolicy),
+//	    builders.WithReducer(myReducerFunction))
+func NewNode[T g.SharedState](name string, fn g.NodeFn[T], opts ...g.NodeOption[T]) (g.Node[T], error) {
+	if name == ReservedNodeNameStart || name == ReservedNodeNameEnd {
+		return nil, fmt.Errorf("node creation error for name %s: %w", name, g.ErrReservedNodeName)
 	}
-	policy := b.routingPolicy
+
+	useOpts := &g.NodeOptions[T]{
+		Reducer: i.Replacer[T],
+	}
+	for _, opt := range opts {
+		opt.Apply(useOpts)
+	}
+
+	policy := useOpts.RoutingPolicy
 	if policy == nil {
 		var err error
 		policy, err = CreateAnyRoutePolicy[T]()
@@ -102,18 +51,22 @@ func (b NodeBuilder[T]) Build() (g.Node[T], error) {
 			return nil, err
 		}
 	}
-	reducer := b.reducer
-	if reducer == nil {
-		reducer = i.Replacer[T]
-	}
-	return i.NodeImplFactory(g.IntermediateNode, b.name, b.fn, policy, reducer), nil
+
+	return i.NodeImplFactory(g.IntermediateNode, name, fn, useOpts), nil
 }
 
 func createStartNode[T g.SharedState]() (g.Node[T], error) {
 	policy, _ := CreateAnyRoutePolicy[T]()
-	return i.NodeImplFactory(g.StartNode, ReservedNodeNameStart, nil, policy, i.Replacer[T]), nil
+	useOpts := &g.NodeOptions[T]{
+		RoutingPolicy: policy,
+		Reducer:       i.Replacer[T],
+	}
+	return i.NodeImplFactory(g.StartNode, ReservedNodeNameStart, nil, useOpts), nil
 }
 
 func createEndNode[T g.SharedState]() (g.Node[T], error) {
-	return i.NodeImplFactory[T](g.EndNode, ReservedNodeNameEnd, nil, nil, i.Replacer[T]), nil
+	useOpts := &g.NodeOptions[T]{
+		Reducer: i.Replacer[T],
+	}
+	return i.NodeImplFactory(g.EndNode, ReservedNodeNameEnd, nil, useOpts), nil
 }

@@ -495,7 +495,7 @@ func main() {
 	stateMonitorCh := make(chan g.StateMonitorEntry[a.Conversation], numThreads*10)
 
 	// Create the runtime graph
-	graph, err := b.CreateRuntimeWithInitialState(startEdge, stateMonitorCh, initialState)
+	graph, err := b.CreateRuntime(startEdge, stateMonitorCh, g.WithInitialState(initialState))
 	if err != nil {
 		log.Fatalf("Runtime creation failed: %v", err)
 	}

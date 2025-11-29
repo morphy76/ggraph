@@ -17,17 +17,17 @@ func mockNodeFn(userInput, currentState a.Conversation, notify g.NotifyPartialFn
 func TestToolProcessorRoutingFn(t *testing.T) {
 	t.Run("no_tool_calls_returns_any_edge", func(t *testing.T) {
 		// Create test nodes
-		node1, err := b.NewNodeBuilder("node1", mockNodeFn).Build()
+		node1, err := b.NewNode("node1", mockNodeFn)
 		if err != nil {
 			t.Fatalf("Failed to create node1: %v", err)
 		}
 
-		node2, err := b.NewNodeBuilder("node2", mockNodeFn).Build()
+		node2, err := b.NewNode("node2", mockNodeFn)
 		if err != nil {
 			t.Fatalf("Failed to create node2: %v", err)
 		}
 
-		node3, err := b.NewNodeBuilder("node3", mockNodeFn).Build()
+		node3, err := b.NewNode("node3", mockNodeFn)
 		if err != nil {
 			t.Fatalf("Failed to create node3: %v", err)
 		}
@@ -67,17 +67,17 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 
 	t.Run("with_tool_calls_returns_tool_executor_edge", func(t *testing.T) {
 		// Create test nodes
-		node1, err := b.NewNodeBuilder("node1", mockNodeFn).Build()
+		node1, err := b.NewNode("node1", mockNodeFn)
 		if err != nil {
 			t.Fatalf("Failed to create node1: %v", err)
 		}
 
-		node2, err := b.NewNodeBuilder("node2", mockNodeFn).Build()
+		node2, err := b.NewNode("node2", mockNodeFn)
 		if err != nil {
 			t.Fatalf("Failed to create node2: %v", err)
 		}
 
-		node3, err := b.NewNodeBuilder("toolExecutor", mockNodeFn).Build()
+		node3, err := b.NewNode("toolExecutor", mockNodeFn)
 		if err != nil {
 			t.Fatalf("Failed to create toolExecutor node: %v", err)
 		}
@@ -122,12 +122,12 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 
 	t.Run("with_tool_calls_but_no_executor_edge_returns_nil", func(t *testing.T) {
 		// Create test nodes
-		node1, err := b.NewNodeBuilder("node1", mockNodeFn).Build()
+		node1, err := b.NewNode("node1", mockNodeFn)
 		if err != nil {
 			t.Fatalf("Failed to create node1: %v", err)
 		}
 
-		node2, err := b.NewNodeBuilder("node2", mockNodeFn).Build()
+		node2, err := b.NewNode("node2", mockNodeFn)
 		if err != nil {
 			t.Fatalf("Failed to create node2: %v", err)
 		}
@@ -163,12 +163,12 @@ func TestToolProcessorRoutingFn(t *testing.T) {
 
 	t.Run("with_multiple_tool_calls_returns_executor_edge", func(t *testing.T) {
 		// Create test nodes
-		node1, err := b.NewNodeBuilder("node1", mockNodeFn).Build()
+		node1, err := b.NewNode("node1", mockNodeFn)
 		if err != nil {
 			t.Fatalf("Failed to create node1: %v", err)
 		}
 
-		node2, err := b.NewNodeBuilder("toolExecutor", mockNodeFn).Build()
+		node2, err := b.NewNode("toolExecutor", mockNodeFn)
 		if err != nil {
 			t.Fatalf("Failed to create toolExecutor node: %v", err)
 		}

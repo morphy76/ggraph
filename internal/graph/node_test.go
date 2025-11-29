@@ -89,12 +89,16 @@ func TestNodeImplFactory_BasicCreation(t *testing.T) {
 	routePolicy, _ := graph.RouterPolicyImplFactory[NodeTestState](graph.AnyRoute[NodeTestState])
 	reducer := graph.Replacer[NodeTestState]
 
+	opts := &g.NodeOptions[NodeTestState]{
+		RoutingPolicy: routePolicy,
+		Reducer:       reducer,
+	}
+
 	node := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"test-node",
 		nodeFn,
-		routePolicy,
-		reducer,
+		opts,
 	)
 
 	if node == nil {
@@ -115,15 +119,20 @@ func TestNodeImplFactory_BasicCreation(t *testing.T) {
 }
 
 func TestNodeImplFactory_WithNilNodeFn(t *testing.T) {
+
 	routePolicy, _ := graph.RouterPolicyImplFactory[NodeTestState](graph.AnyRoute[NodeTestState])
 	reducer := graph.Replacer[NodeTestState]
+
+	opts := &g.NodeOptions[NodeTestState]{
+		RoutingPolicy: routePolicy,
+		Reducer:       reducer,
+	}
 
 	node := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"test-node",
 		nil,
-		routePolicy,
-		reducer,
+		opts,
 	)
 
 	if node == nil {
@@ -154,12 +163,15 @@ func TestNodeImplFactory_WithNilRoutePolicy(t *testing.T) {
 	}
 	reducer := graph.Replacer[NodeTestState]
 
+	opts := &g.NodeOptions[NodeTestState]{
+		Reducer: reducer,
+	}
+
 	node := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"test-node",
 		nodeFn,
-		nil,
-		reducer,
+		opts,
 	)
 
 	if node == nil {
@@ -178,6 +190,11 @@ func TestNodeImplFactory_AllRoles(t *testing.T) {
 	routePolicy, _ := graph.RouterPolicyImplFactory[NodeTestState](graph.AnyRoute[NodeTestState])
 	reducer := graph.Replacer[NodeTestState]
 
+	opts := &g.NodeOptions[NodeTestState]{
+		RoutingPolicy: routePolicy,
+		Reducer:       reducer,
+	}
+
 	testCases := []struct {
 		name string
 		role g.NodeRole
@@ -193,8 +210,7 @@ func TestNodeImplFactory_AllRoles(t *testing.T) {
 				tc.role,
 				"test-node",
 				nodeFn,
-				routePolicy,
-				reducer,
+				opts,
 			)
 
 			if node.Role() != tc.role {
@@ -213,12 +229,16 @@ func TestNodeImplFactory_NodeExecution(t *testing.T) {
 	routePolicy, _ := graph.RouterPolicyImplFactory[NodeTestState](graph.AnyRoute[NodeTestState])
 	reducer := graph.Replacer[NodeTestState]
 
+	opts := &g.NodeOptions[NodeTestState]{
+		RoutingPolicy: routePolicy,
+		Reducer:       reducer,
+	}
+
 	node := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"process-node",
 		nodeFn,
-		routePolicy,
-		reducer,
+		opts,
 	)
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
@@ -256,12 +276,16 @@ func TestNodeImplFactory_NodeExecutionWithError(t *testing.T) {
 	routePolicy, _ := graph.RouterPolicyImplFactory[NodeTestState](graph.AnyRoute[NodeTestState])
 	reducer := graph.Replacer[NodeTestState]
 
+	opts := &g.NodeOptions[NodeTestState]{
+		RoutingPolicy: routePolicy,
+		Reducer:       reducer,
+	}
+
 	node := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"error-node",
 		nodeFn,
-		routePolicy,
-		reducer,
+		opts,
 	)
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
@@ -299,12 +323,16 @@ func TestNodeImplFactory_PartialStateUpdates(t *testing.T) {
 	routePolicy, _ := graph.RouterPolicyImplFactory[NodeTestState](graph.AnyRoute[NodeTestState])
 	reducer := graph.Replacer[NodeTestState]
 
+	opts := &g.NodeOptions[NodeTestState]{
+		RoutingPolicy: routePolicy,
+		Reducer:       reducer,
+	}
+
 	node := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"partial-node",
 		nodeFn,
-		routePolicy,
-		reducer,
+		opts,
 	)
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
@@ -366,12 +394,16 @@ func TestNodeImplFactory_DifferentStateTypes(t *testing.T) {
 	routePolicy, _ := graph.RouterPolicyImplFactory[AnotherState](graph.AnyRoute[AnotherState])
 	reducer := graph.Replacer[AnotherState]
 
+	opts := &g.NodeOptions[AnotherState]{
+		RoutingPolicy: routePolicy,
+		Reducer:       reducer,
+	}
+
 	node := graph.NodeImplFactory[AnotherState](
 		g.IntermediateNode,
 		"typed-node",
 		nodeFn,
-		routePolicy,
-		reducer,
+		opts,
 	)
 
 	if node == nil {
@@ -397,12 +429,16 @@ func TestNodeImplFactory_WithReducer(t *testing.T) {
 	}
 	routePolicy, _ := graph.RouterPolicyImplFactory[NodeTestState](graph.AnyRoute[NodeTestState])
 
+	opts := &g.NodeOptions[NodeTestState]{
+		RoutingPolicy: routePolicy,
+		Reducer:       customReducer,
+	}
+
 	node := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"reducer-node",
 		nodeFn,
-		routePolicy,
-		customReducer,
+		opts,
 	)
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 10})
@@ -438,12 +474,16 @@ func TestNodeImplFactory_MultipleExecutions(t *testing.T) {
 	routePolicy, _ := graph.RouterPolicyImplFactory[NodeTestState](graph.AnyRoute[NodeTestState])
 	reducer := graph.Replacer[NodeTestState]
 
+	opts := &g.NodeOptions[NodeTestState]{
+		RoutingPolicy: routePolicy,
+		Reducer:       reducer,
+	}
+
 	node := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"multi-exec-node",
 		nodeFn,
-		routePolicy,
-		reducer,
+		opts,
 	)
 
 	for i := 1; i <= 3; i++ {
@@ -479,13 +519,17 @@ func TestNodeImplFactory_NodeNamePreservation(t *testing.T) {
 	routePolicy, _ := graph.RouterPolicyImplFactory[NodeTestState](graph.AnyRoute[NodeTestState])
 	reducer := graph.Replacer[NodeTestState]
 
+	opts := &g.NodeOptions[NodeTestState]{
+		RoutingPolicy: routePolicy,
+		Reducer:       reducer,
+	}
+
 	for _, name := range names {
 		node := graph.NodeImplFactory[NodeTestState](
 			g.IntermediateNode,
 			name,
 			nodeFn,
-			routePolicy,
-			reducer,
+			opts,
 		)
 
 		if node.Name() != name {
@@ -500,12 +544,16 @@ func TestNodeImplFactory_NilReducer(t *testing.T) {
 	}
 	routePolicy, _ := graph.RouterPolicyImplFactory[NodeTestState](graph.AnyRoute[NodeTestState])
 
+	opts := &g.NodeOptions[NodeTestState]{
+		RoutingPolicy: routePolicy,
+		Reducer:       nil,
+	}
+
 	node := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"nil-reducer-node",
 		nodeFn,
-		routePolicy,
-		nil,
+		opts,
 	)
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 10})
