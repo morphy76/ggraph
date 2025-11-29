@@ -122,7 +122,10 @@ func (r *runtimeImpl[T]) Invoke(userInput T, configs ...g.InvokeConfig) string {
 		_ = r.Restore(useConfig.ThreadID)
 	}
 
+	// Update thread TTL with proper locking
+	r.runtimeLock.Lock()
 	r.threadTTL[useConfig.ThreadID] = time.Now().Add(1 * time.Hour)
+	r.runtimeLock.Unlock()
 
 	if !r.executingByThreadID(useConfig).CompareAndSwap(false, true) {
 		r.sendMonitorEntry(monitorError[T]("Runtime", useConfig.ThreadID, fmt.Errorf("cannot invoke graph for thread %s: %w", useConfig.ThreadID, g.ErrRuntimeExecuting)))
@@ -186,11 +189,10 @@ func (r *runtimeImpl[T]) NotifyStateChange(
 }
 
 func (r *runtimeImpl[T]) CurrentState(threadID string) T {
-	useLock := r.lockByThreadID(threadID)
-	useLock.RLock()
-	defer useLock.RUnlock()
-
+	r.runtimeLock.RLock()
 	useState, exists := r.state[threadID]
+	r.runtimeLock.RUnlock()
+
 	if !exists {
 		useState = r.initialState
 	}
@@ -214,12 +216,10 @@ func (r *runtimeImpl[T]) Restore(threadID string) error {
 		return fmt.Errorf("state restoration failed: %w", err)
 	}
 
-	useLock := r.lockByThreadID(threadID)
-	useLock.Lock()
-	defer useLock.Unlock()
-
+	r.runtimeLock.Lock()
 	r.state[threadID] = restoredState
 	r.lastPersisted[threadID] = restoredState
+	r.runtimeLock.Unlock()
 
 	return nil
 }
@@ -240,12 +240,10 @@ func (r *runtimeImpl[T]) persistState(threadID string) error {
 		return nil
 	}
 
-	useLock := r.lockByThreadID(threadID)
-	useLock.RLock()
-	defer useLock.RUnlock()
-
+	r.runtimeLock.RLock()
 	currentState := r.state[threadID]
 	lastPersisted := r.lastPersisted[threadID]
+	r.runtimeLock.RUnlock()
 
 	if r.statesEqual(currentState, lastPersisted) {
 		return nil
@@ -342,7 +340,10 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 					continue
 				}
 
-				nextEdge := policy.SelectEdge(result.userInput, r.state[useThreadID], outboundEdges)
+				r.runtimeLock.RLock()
+				currentState := r.state[useThreadID]
+				r.runtimeLock.RUnlock()
+				nextEdge := policy.SelectEdge(result.userInput, currentState, outboundEdges)
 				if nextEdge == nil {
 					r.sendMonitorEntry(monitorError[T](result.node.Name(), useThreadID, fmt.Errorf("routing error for node %s: %w", result.node.Name(), g.ErrNilEdge)))
 					useExecuting.Store(false)
@@ -377,9 +378,8 @@ func (r *runtimeImpl[T]) sendMonitorEntry(entry g.StateMonitorEntry[T]) {
 }
 
 func (r *runtimeImpl[T]) replace(threadID string, stateChange T, reducer g.ReducerFn[T]) T {
-	useLock := r.lockByThreadID(threadID)
-	useLock.Lock()
-	defer useLock.Unlock()
+	r.runtimeLock.Lock()
+	defer r.runtimeLock.Unlock()
 
 	// Get current state without calling CurrentState() to avoid deadlock
 	useState := r.initialState
@@ -475,17 +475,27 @@ func (r *runtimeImpl[T]) threadEvictor() {
 			return
 		case <-ticker.C:
 			now := time.Now()
+
+			// Collect expired threads while holding the runtime lock
+			r.runtimeLock.RLock()
+			var expiredThreads []string
 			for threadID, expiry := range r.threadTTL {
 				if now.After(expiry) {
-					err := r.persistState(threadID)
-					if err != nil {
-						r.sendMonitorEntry(monitorNonFatalError[T]("ThreadEvictor", threadID, fmt.Errorf("state persistence error during eviction: %w", err)))
-					}
-
-					r.clearThread(threadID)
-
-					r.sendMonitorEntry(monitorNonFatalError[T]("ThreadEvictor", threadID, fmt.Errorf("evicted thread %s: %w", threadID, g.ErrEvictionByInactivity)))
+					expiredThreads = append(expiredThreads, threadID)
 				}
+			}
+			r.runtimeLock.RUnlock()
+
+			// Process expired threads outside the lock
+			for _, threadID := range expiredThreads {
+				err := r.persistState(threadID)
+				if err != nil {
+					r.sendMonitorEntry(monitorNonFatalError[T]("ThreadEvictor", threadID, fmt.Errorf("state persistence error during eviction: %w", err)))
+				}
+
+				r.clearThread(threadID)
+
+				r.sendMonitorEntry(monitorNonFatalError[T]("ThreadEvictor", threadID, fmt.Errorf("evicted thread %s: %w", threadID, g.ErrEvictionByInactivity)))
 			}
 		}
 	}
@@ -509,6 +519,9 @@ func (r *runtimeImpl[T]) statesEqual(a, b T) bool {
 }
 
 func (r *runtimeImpl[T]) executingByThreadID(config g.InvokeConfig) *atomic.Bool {
+	r.runtimeLock.Lock()
+	defer r.runtimeLock.Unlock()
+
 	exec, exists := r.executing[config.ThreadID]
 	if !exists {
 		exec = &atomic.Bool{}
@@ -529,18 +542,16 @@ func (r *runtimeImpl[T]) lockByThreadID(threadID string) *sync.RWMutex {
 }
 
 func (r *runtimeImpl[T]) threadExistsWithinTTL(threadID string) bool {
-	useLock := r.lockByThreadID(threadID)
-	useLock.RLock()
-	defer useLock.RUnlock()
+	r.runtimeLock.RLock()
+	defer r.runtimeLock.RUnlock()
 
 	ttl, exists := r.threadTTL[threadID]
 	return exists && time.Now().Before(ttl)
 }
 
 func (r *runtimeImpl[T]) clearThread(threadID string) {
-	useLock := r.lockByThreadID(threadID)
-	useLock.Lock()
-	defer useLock.Unlock()
+	r.runtimeLock.Lock()
+	defer r.runtimeLock.Unlock()
 
 	delete(r.threadTTL, threadID)
 	delete(r.state, threadID)
