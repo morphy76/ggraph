@@ -192,13 +192,18 @@ func TestNode_EmptyName(t *testing.T) {
 		t.Fatalf("NewNode() failed: %v", err)
 	}
 
-	// Empty names are allowed (not reserved)
+	// Empty names should be replaced with UUID
 	if node == nil {
 		t.Fatal("NewNode() returned nil node")
 	}
 
-	if node.Name() != "" {
-		t.Errorf("Expected empty node name, got '%s'", node.Name())
+	if node.Name() == "" {
+		t.Error("Expected non-empty node name (UUID), got empty string")
+	}
+
+	// Check that it looks like a UUID (has dashes in typical positions)
+	if len(node.Name()) != 36 {
+		t.Errorf("Expected UUID format (36 characters), got '%s' with length %d", node.Name(), len(node.Name()))
 	}
 }
 

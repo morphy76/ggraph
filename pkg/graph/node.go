@@ -5,6 +5,12 @@ import "errors"
 var (
 	// ErrReservedNodeName indicates that the node name is reserved and cannot be used.
 	ErrReservedNodeName = errors.New("node name is reserved and cannot be used")
+	// ErrNodeNameEmpty indicates that the node name is empty.
+	ErrNodeNameEmpty = errors.New("node name cannot be empty")
+	// ErrNodeOptionsNil indicates that the node options are nil.
+	ErrNodeOptionsNil = errors.New("node options cannot be nil")
+	// ErrInvalidNodeRole indicates that the node role is invalid.
+	ErrInvalidNodeRole = errors.New("invalid node role")
 )
 
 // NodeRole represents the structural role of a node within the graph topology.

@@ -1034,30 +1034,77 @@ type workerPool struct {
 
 ## Security Concerns
 
-### 🟢 MEDIUM: No Input Validation
+### ✅ FIXED: Input Validation Now Implemented
 
-**Issue:** No validation that nodes, edges, or state meet requirements.
+**Location:** `RuntimeFactory()` in `internal/graph/runtime.go` (lines 24-35) and `NodeImplFactory()` in `internal/graph/node.go` (lines 12-26)
 
-**Examples:**
-- Node names could be empty
-- Edges could have nil from/to
-- State could be nil
+**Status:** ✅ **RESOLVED**
 
-**Recommendation:**
+**What Was Fixed:**
+
+**RuntimeFactory validation:**
 ```go
 func RuntimeFactory[T g.SharedState](...) (g.Runtime[T], error) {
     if startEdge == nil {
-        return nil, ErrStartEdgeNil
+        return nil, fmt.Errorf("runtime creation failed: %w", g.ErrStartEdgeNil)
     }
     if startEdge.From() == nil {
-        return nil, fmt.Errorf("start edge has nil source: %w", ErrInvalidEdge)
+        return nil, fmt.Errorf("runtime creation failed: %w", g.ErrSourceNodeNil)
     }
     if startEdge.To() == nil {
-        return nil, fmt.Errorf("start edge has nil target: %w", ErrInvalidEdge)
+        return nil, fmt.Errorf("runtime creation failed: %w", g.ErrDestinationNodeNil)
+    }
+    if opts == nil {
+        return nil, fmt.Errorf("runtime creation failed: %w", g.ErrRuntimeOptionsNil)
     }
     // ...
 }
 ```
+
+**NodeImplFactory validation:**
+```go
+func NodeImplFactory[T g.SharedState](...) (g.Node[T], error) {
+    if name == "" {
+        return nil, fmt.Errorf("node creation failed: %w", g.ErrNodeNameEmpty)
+    }
+    if name == "StartNode" || name == "EndNode" {
+        if role != g.StartNode && role != g.EndNode {
+            return nil, fmt.Errorf("node creation failed: %w", g.ErrReservedNodeName)
+        }
+    }
+    if opt == nil {
+        return nil, fmt.Errorf("node creation failed: %w", g.ErrNodeOptionsNil)
+    }
+    if role < g.StartNode || role > g.EndNode {
+        return nil, fmt.Errorf("node creation failed: %w", g.ErrInvalidNodeRole)
+    }
+    // ...
+}
+```
+
+**New Error Constants Added:**
+- `ErrSourceNodeNil` - start edge source is nil
+- `ErrDestinationNodeNil` - start edge target is nil
+- `ErrRuntimeOptionsNil` - runtime options are nil
+- `ErrNodeNameEmpty` - node name is empty
+- `ErrNodeOptionsNil` - node options are nil
+- `ErrInvalidNodeRole` - node role is out of valid range
+
+**Test Coverage:**
+- ✅ `TestRuntimeFactory_NilStartNode`
+- ✅ `TestRuntimeFactory_NilTargetNode`
+- ✅ `TestRuntimeFactory_NilOptions`
+- ✅ `TestNodeImplFactory_EmptyName`
+- ✅ `TestNodeImplFactory_ReservedNameNonReservedRole`
+- ✅ `TestNodeImplFactory_NilOptions`
+- ✅ `TestNodeImplFactory_InvalidRole`
+
+**Benefits:**
+- Fails fast with clear error messages
+- Prevents runtime panics from nil pointer dereferences
+- Validates reserved name usage
+- Ensures role values are within valid range
+- All errors properly wrapped with `%w` for error inspection
 
 ---
 
@@ -1075,14 +1122,14 @@ func RuntimeFactory[T g.SharedState](...) (g.Runtime[T], error) {
 6. ✅ **DONE** - Locks used with `defer` consistently
 7. ✅ **DONE** - Context cancellation support via `InvokeConfig.Context` (lines 265-273)
 8. ✅ **DONE** - Thread cleanup with `clearThread()` helper (lines 503-513)
+9. ✅ **DONE** - Input validation in factory functions (RuntimeFactory and NodeImplFactory)
 
 ### High Priority (Recommended Before Production):
 
 9. 🟡 Close channels in `Shutdown()` to properly signal completion
 10. 🟡 Make thread TTL configurable (currently hardcoded to 1 hour, line 112)
 11. 🟡 Add `ListThreads()` method to enumerate active threads
-9. 🟡 Add input validation to factory functions
-10. 🟡 Document concurrency guarantees and thread safety
+12. 🟡 Document concurrency guarantees and thread safety
 
 ### Medium Priority (Future Iteration):
 

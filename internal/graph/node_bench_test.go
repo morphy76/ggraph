@@ -25,7 +25,7 @@ func BenchmarkNodeFactory(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_ = graph.NodeImplFactory[NodeTestState](
+		_, _ = graph.NodeImplFactory[NodeTestState](
 			g.IntermediateNode,
 			"test-node",
 			nodeFn,
@@ -48,12 +48,15 @@ func BenchmarkNode_Accept(b *testing.B) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"bench-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		b.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
 	userInput := NodeTestState{Value: "input", Counter: 5}
@@ -86,12 +89,15 @@ func BenchmarkNode_SimpleExecution(b *testing.B) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"simple-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		b.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
 	userInput := NodeTestState{Value: "input", Counter: 0}
@@ -135,12 +141,15 @@ func BenchmarkNode_ComplexStateTransformation(b *testing.B) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"complex-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		b.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "state", Counter: 10})
 	userInput := NodeTestState{Value: "input", Counter: 5}
@@ -179,12 +188,15 @@ func BenchmarkNode_WithCustomReducer(b *testing.B) {
 		Reducer:       customReducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"reducer-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		b.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 10})
 	userInput := NodeTestState{Value: "input", Counter: 5}
@@ -222,12 +234,15 @@ func BenchmarkNode_PartialUpdates(b *testing.B) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"partial-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		b.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
 	userInput := NodeTestState{Value: "input", Counter: 0}
@@ -259,12 +274,15 @@ func BenchmarkNode_Name(b *testing.B) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"bench-name-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		b.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -287,12 +305,15 @@ func BenchmarkNode_Role(b *testing.B) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"bench-role-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		b.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -315,12 +336,15 @@ func BenchmarkNode_RoutePolicy(b *testing.B) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"bench-policy-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		b.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -344,12 +368,15 @@ func BenchmarkNode_ConcurrentExecution(b *testing.B) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"concurrent-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		b.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
 
@@ -394,12 +421,15 @@ func BenchmarkNode_DifferentRoles(b *testing.B) {
 				Reducer:       reducer,
 			}
 
-			node := graph.NodeImplFactory[NodeTestState](
+			node, err := graph.NodeImplFactory[NodeTestState](
 				role,
 				"bench-node",
 				nodeFn,
 				opts,
 			)
+			if err != nil {
+				b.Fatalf("NodeImplFactory failed: %v", err)
+			}
 
 			observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
 			userInput := NodeTestState{Value: "input", Counter: 0}

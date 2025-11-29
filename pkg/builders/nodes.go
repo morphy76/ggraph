@@ -3,6 +3,7 @@ package builders
 import (
 	"fmt"
 
+	"github.com/google/uuid"
 	i "github.com/morphy76/ggraph/internal/graph"
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
@@ -32,8 +33,14 @@ const (
 //	    builders.WithRoutingPolicy(myRoutingPolicy),
 //	    builders.WithReducer(myReducerFunction))
 func NewNode[T g.SharedState](name string, fn g.NodeFn[T], opts ...g.NodeOption[T]) (g.Node[T], error) {
+	// Check for reserved names first
 	if name == ReservedNodeNameStart || name == ReservedNodeNameEnd {
 		return nil, fmt.Errorf("node creation error for name %s: %w", name, g.ErrReservedNodeName)
+	}
+
+	// Generate UUID for empty names
+	if name == "" {
+		name = uuid.NewString()
 	}
 
 	useOpts := &g.NodeOptions[T]{
@@ -51,7 +58,7 @@ func NewNode[T g.SharedState](name string, fn g.NodeFn[T], opts ...g.NodeOption[
 		}
 	}
 
-	return i.NodeImplFactory(g.IntermediateNode, name, fn, useOpts), nil
+	return i.NodeImplFactory(g.IntermediateNode, name, fn, useOpts)
 }
 
 func createStartNode[T g.SharedState]() (g.Node[T], error) {
@@ -60,12 +67,12 @@ func createStartNode[T g.SharedState]() (g.Node[T], error) {
 		RoutingPolicy: policy,
 		Reducer:       i.Replacer[T],
 	}
-	return i.NodeImplFactory(g.StartNode, ReservedNodeNameStart, nil, useOpts), nil
+	return i.NodeImplFactory(g.StartNode, ReservedNodeNameStart, nil, useOpts)
 }
 
 func createEndNode[T g.SharedState]() (g.Node[T], error) {
 	useOpts := &g.NodeOptions[T]{
 		Reducer: i.Replacer[T],
 	}
-	return i.NodeImplFactory(g.EndNode, ReservedNodeNameEnd, nil, useOpts), nil
+	return i.NodeImplFactory(g.EndNode, ReservedNodeNameEnd, nil, useOpts)
 }

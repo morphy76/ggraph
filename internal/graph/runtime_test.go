@@ -155,6 +155,80 @@ func TestRuntimeFactory_NilStartEdge(t *testing.T) {
 	}
 }
 
+// TestRuntimeFactory_NilStartNode tests that creating runtime with nil start node fails
+func TestRuntimeFactory_NilStartNode(t *testing.T) {
+	stateMonitorCh := make(chan g.StateMonitorEntry[RuntimeTestState], 10)
+	initialState := RuntimeTestState{Value: "initial"}
+
+	// Create an edge with nil From node
+	node1 := newMockRuntimeNode("Node1", g.IntermediateNode, nil, nil)
+	startEdge := &mockRuntimeEdge{from: nil, to: node1, role: g.StartEdge}
+
+	runtime, err := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{InitialState: initialState})
+	if err == nil {
+		t.Fatal("Expected error when creating runtime with nil start node, got nil")
+	}
+
+	if runtime != nil {
+		runtime.Shutdown()
+		t.Error("Expected nil runtime when start node is nil, got non-nil")
+	}
+
+	expectedErrMsg := "runtime creation failed: start node cannot be nil"
+	if err.Error() != expectedErrMsg {
+		t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
+	}
+}
+
+// TestRuntimeFactory_NilTargetNode tests that creating runtime with nil target node fails
+func TestRuntimeFactory_NilTargetNode(t *testing.T) {
+	stateMonitorCh := make(chan g.StateMonitorEntry[RuntimeTestState], 10)
+	initialState := RuntimeTestState{Value: "initial"}
+
+	// Create an edge with nil To node
+	startNode := newMockRuntimeNode("StartNode", g.StartNode, nil, nil)
+	startEdge := &mockRuntimeEdge{from: startNode, to: nil, role: g.StartEdge}
+
+	runtime, err := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{InitialState: initialState})
+	if err == nil {
+		t.Fatal("Expected error when creating runtime with nil target node, got nil")
+	}
+
+	if runtime != nil {
+		runtime.Shutdown()
+		t.Error("Expected nil runtime when target node is nil, got non-nil")
+	}
+
+	expectedErrMsg := "runtime creation failed: end node cannot be nil"
+	if err.Error() != expectedErrMsg {
+		t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
+	}
+}
+
+// TestRuntimeFactory_NilOptions tests that creating runtime with nil options fails
+func TestRuntimeFactory_NilOptions(t *testing.T) {
+	stateMonitorCh := make(chan g.StateMonitorEntry[RuntimeTestState], 10)
+
+	startNode := newMockRuntimeNode("StartNode", g.StartNode, nil, nil)
+	node1 := newMockRuntimeNode("Node1", g.IntermediateNode, nil, nil)
+	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
+
+	runtime, err := RuntimeFactory[RuntimeTestState](startEdge, stateMonitorCh, nil)
+	if err == nil {
+		t.Fatal("Expected error when creating runtime with nil options, got nil")
+	}
+
+	if runtime != nil {
+		runtime.Shutdown()
+		t.Error("Expected nil runtime when options are nil, got non-nil")
+	}
+
+	expectedErrMsg := "runtime creation failed: runtime options cannot be nil"
+	if err.Error() != expectedErrMsg {
+		t.Errorf("Expected error message '%s', got '%s'", expectedErrMsg, err.Error())
+	}
+}
+
 // TestRuntime_AddEdge tests adding edges to the runtime
 func TestRuntime_AddEdge(t *testing.T) {
 	stateMonitorCh := make(chan g.StateMonitorEntry[RuntimeTestState], 10)

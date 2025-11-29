@@ -1,11 +1,20 @@
 package graph
 
+import "errors"
+
 // EdgeRole defines the structural role of an edge within the graph topology.
 //
 // The role determines how the edge participates in the graph workflow and affects
 // validation and execution behavior. Each graph must have exactly one StartEdge
 // and at least one EndEdge to define entry and exit points.
 type EdgeRole int
+
+var (
+	// ErrSourceNodeNil indicates that the start node is nil.
+	ErrSourceNodeNil = errors.New("start node cannot be nil")
+	// ErrDestinationNodeNil indicates that the end node is nil.
+	ErrDestinationNodeNil = errors.New("end node cannot be nil")
+)
 
 const (
 	// StartEdge connects the implicit start node to the first operational node.
