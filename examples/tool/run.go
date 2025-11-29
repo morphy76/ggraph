@@ -126,6 +126,9 @@ func main() {
 	}
 
 	toolProcessor, err := ag.CreateToolNode("ToolProcessor", tool1, tool2)
+	if err != nil {
+		log.Fatalf("Failed to create tool processor node: %v", err)
+	}
 
 	startEdge := b.CreateStartEdge(llmWithTools)
 	toolRequestEdge := b.CreateEdge(llmWithTools, toolProcessor, map[string]string{a.RouteTagToolKey: a.RouteTagToolRequest})
