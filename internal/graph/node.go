@@ -3,7 +3,6 @@ package graph
 import (
 	"context"
 	"fmt"
-	"time"
 
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
@@ -25,6 +24,8 @@ func NodeImplFactory[T g.SharedState](role g.NodeRole, name string, fn g.NodeFn[
 		return nil, fmt.Errorf("node creation failed: %w", g.ErrInvalidNodeRole)
 	}
 
+	opt.NodeSettings = g.FillNodeSettingsWithDefaults(opt.NodeSettings)
+
 	useFn := fn
 	if useFn == nil {
 		useFn = func(userInput T, currentState T, notifyPartial g.NotifyPartialFn[T]) (T, error) {
@@ -36,12 +37,13 @@ func NodeImplFactory[T g.SharedState](role g.NodeRole, name string, fn g.NodeFn[
 		usePolicy, _ = RouterPolicyImplFactory[T](AnyRoute)
 	}
 	return &nodeImpl[T]{
-		mailbox:     make(chan T, 10),
+		mailbox:     make(chan T, opt.NodeSettings.MailboxSize),
 		name:        name,
 		fn:          useFn,
 		routePolicy: usePolicy,
 		role:        role,
 		reducer:     opt.Reducer,
+		settings:    opt.NodeSettings,
 	}, nil
 }
 
@@ -61,6 +63,8 @@ type nodeImpl[T g.SharedState] struct {
 	role g.NodeRole
 
 	reducer g.ReducerFn[T]
+
+	settings g.NodeSettings
 }
 
 func (n *nodeImpl[T]) Name() string {
@@ -76,7 +80,7 @@ func (n *nodeImpl[T]) Accept(
 	useThreadID := config.ThreadID
 
 	task := func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), n.settings.AcceptTimeout)
 		defer cancel()
 
 		partialStateChange := func(state T) {

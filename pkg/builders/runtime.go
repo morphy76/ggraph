@@ -52,6 +52,7 @@ func CreateRuntime[T g.SharedState](
 	var zeroState T
 	useOpts := &g.RuntimeOptions[T]{
 		InitialState: zeroState,
+		Settings:     g.RuntimeSettings{},
 	}
 	for _, opt := range opts {
 		opt.Apply(useOpts)

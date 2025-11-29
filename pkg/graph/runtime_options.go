@@ -7,6 +7,8 @@ type RuntimeOptions[T SharedState] struct {
 
 	WorkerCount     int
 	WorkerQueueSize int
+
+	Settings RuntimeSettings
 }
 
 // RuntimeOption is a functional option for configuring a graph runtime.
@@ -87,6 +89,25 @@ func WithWorkerPool[T SharedState](workerCount int, workerQueueSize int) Runtime
 	return RuntimeOptionFunc[T](func(r *RuntimeOptions[T]) error {
 		r.WorkerCount = workerCount
 		r.WorkerQueueSize = workerQueueSize
+		return nil
+	})
+}
+
+// WithSettings sets the runtime settings for the graph runtime.
+//
+// Parameters:
+//   - settings: An instance of Settings to configure the runtime.
+//
+// Returns:
+//   - A RuntimeOption that sets the runtime settings.
+//
+// Example:
+//
+//	settings := graph.Settings{...}
+//	runtime, err := builders.CreateRuntime(startEdge, stateMonitorCh, WithSettings(settings))
+func WithSettings[T SharedState](settings RuntimeSettings) RuntimeOption[T] {
+	return RuntimeOptionFunc[T](func(r *RuntimeOptions[T]) error {
+		r.Settings = settings
 		return nil
 	})
 }
