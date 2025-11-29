@@ -10,14 +10,19 @@ type workerPool struct {
 	wg        sync.WaitGroup
 }
 
-func newWorkerPool(workers int, queueSize int) *workerPool {
+func newWorkerPool(
+	workers int,
+	queueSize int,
+	defaultWorkers int,
+	defaultQueueSize int,
+) *workerPool {
 	useQueueSize := queueSize
 	if useQueueSize <= 0 {
-		useQueueSize = 100
+		useQueueSize = defaultQueueSize
 	}
 	useWorkers := workers
 	if useWorkers <= 0 {
-		useWorkers = 4
+		useWorkers = defaultWorkers
 	}
 
 	pool := &workerPool{

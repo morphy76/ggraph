@@ -4,6 +4,7 @@ package graph
 type NodeOptions[T SharedState] struct {
 	RoutingPolicy RoutePolicy[T]
 	Reducer       ReducerFn[T]
+	NodeSettings  NodeSettings
 }
 
 // NodeOption is a functional option for configuring a node.
@@ -64,6 +65,29 @@ func WithRoutingPolicy[T SharedState](policy RoutePolicy[T]) NodeOption[T] {
 func WithReducer[T SharedState](reducer ReducerFn[T]) NodeOption[T] {
 	return NodeOptionFunc[T](func(r *NodeOptions[T]) error {
 		r.Reducer = reducer
+		return nil
+	})
+}
+
+// WithNodeSettings sets custom node settings for the node.
+//
+// Parameters:
+//   - settings: The NodeSettings to configure the node.
+//
+// Returns:
+//   - A NodeOption that sets the node settings.
+//
+// Example:
+//
+//	customSettings := graph.NodeSettings{
+//	    MailboxSize:   20,
+//	    AcceptTimeout: 10 * time.Second,
+//	}
+//	node, err := builders.NewNode("MyNode", myNodeFunction,
+//	    builders.WithNodeSettings(customSettings))
+func WithNodeSettings[T SharedState](settings NodeSettings) NodeOption[T] {
+	return NodeOptionFunc[T](func(r *NodeOptions[T]) error {
+		r.NodeSettings = FillNodeSettingsWithDefaults(settings)
 		return nil
 	})
 }

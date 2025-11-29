@@ -34,19 +34,28 @@ func RuntimeFactory[T g.SharedState](
 	if opts == nil {
 		return nil, fmt.Errorf("runtime creation failed: %w", g.ErrRuntimeOptionsNil)
 	}
+
+	opts.Settings = g.FillRuntimeSettingsWithDefaults(opts.Settings)
+
 	ctx, cancelFn := context.WithCancel(context.Background())
 	rv := &runtimeImpl[T]{
 		ctx:         ctx,
 		cancel:      cancelFn,
 		runtimeLock: &sync.RWMutex{},
 
-		outcomeCh:      make(chan nodeFnReturnStruct[T], 1000),
+		outcomeCh:      make(chan nodeFnReturnStruct[T], opts.Settings.OutcomeNotificationQueueSize),
 		stateMonitorCh: stateMonitorCh,
 
 		startEdge: startEdge,
 		edges:     []g.Edge[T]{},
 
-		workerPool: newWorkerPool(opts.WorkerCount, opts.WorkerQueueSize),
+		workerPool: newWorkerPool(
+			opts.WorkerCount,
+			opts.WorkerQueueSize,
+			opts.Settings.DefaultWorkerCount,
+			opts.Settings.DefaultWorkerQueueSize,
+		),
+		settings: opts.Settings,
 
 		initialState:    opts.InitialState,
 		state:           make(map[string]T),
@@ -56,7 +65,7 @@ func RuntimeFactory[T g.SharedState](
 
 		lastPersisted: make(map[string]T),
 
-		pendingPersist: make(chan pendingPersistEntry[T], 10),
+		pendingPersist: make(chan pendingPersistEntry[T], opts.Settings.PersistenceJobsQueueSize),
 
 		threadTTL: make(map[string]time.Time),
 	}
@@ -106,6 +115,8 @@ type runtimeImpl[T g.SharedState] struct {
 
 	workerPool *workerPool
 
+	settings g.RuntimeSettings
+
 	initialState    T
 	state           map[string]T
 	stateChangeLock map[string]*sync.RWMutex
@@ -138,7 +149,7 @@ func (r *runtimeImpl[T]) Invoke(userInput T, configs ...g.InvokeConfig) string {
 
 	// Update thread TTL with proper locking
 	r.runtimeLock.Lock()
-	r.threadTTL[useConfig.ThreadID] = time.Now().Add(1 * time.Hour)
+	r.threadTTL[useConfig.ThreadID] = time.Now().Add(r.settings.ThreadTTL)
 	r.runtimeLock.Unlock()
 
 	if !r.executingByThreadID(useConfig).CompareAndSwap(false, true) {
@@ -173,7 +184,7 @@ func (r *runtimeImpl[T]) Validate() error {
 func (r *runtimeImpl[T]) Shutdown() {
 	r.cancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), r.settings.GracefulShutdownTimeout)
 	defer cancel()
 
 	done := make(chan struct{})
@@ -268,7 +279,7 @@ func (r *runtimeImpl[T]) persistState(threadID string) error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), r.settings.PersistenceJobTimeout)
 	defer cancel()
 
 	select {
@@ -391,7 +402,7 @@ func (r *runtimeImpl[T]) sendMonitorEntry(entry g.StateMonitorEntry[T]) {
 
 	select {
 	case r.stateMonitorCh <- entry:
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(r.settings.OutcomeNotificationMaxInterval):
 	case <-r.ctx.Done():
 	}
 }
@@ -486,7 +497,7 @@ func (r *runtimeImpl[T]) startThreadEvictor() {
 func (r *runtimeImpl[T]) threadEvictor() {
 	defer r.backgroundWorkers.Done()
 
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(r.settings.ThreadEvictorInterval)
 	defer ticker.Stop()
 	for {
 		select {

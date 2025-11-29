@@ -255,6 +255,74 @@ type StateObserver[T SharedState] interface {
 
 ---
 
+#### 4. ✅ **FIXED**: Magic Numbers Extracted to Configurable Settings (ISSUE #19)
+
+**Location:** `RuntimeSettings` (pkg/graph/runtime_settings.go) and `NodeSettings` (pkg/graph/node_settings.go)
+
+```go
+// pkg/graph/runtime_settings.go
+type RuntimeSettings struct {
+    PersistenceJobsQueueSize          int
+    OutcomeNotificationQueueSize      int
+    ThreadTTL                         time.Duration
+    PersistenceJobTimeout             time.Duration
+    GracefulShutdownTimeout           time.Duration
+    OutcomeNotificationMaxInterval    time.Duration
+    ThreadEvictorInterval             time.Duration
+    DefaultWorkerCount                int
+    DefaultWorkerQueueSize            int
+}
+
+// pkg/graph/node_settings.go
+type NodeSettings struct {
+    MailboxSize    int
+    AcceptTimeout  time.Duration
+}
+```
+
+**Status:** ✅ **RESOLVED**
+
+**Previous Issue:** Magic numbers scattered throughout the codebase made configuration inflexible and maintenance difficult.
+
+**Current Implementation:**
+- ✅ All hardcoded values extracted to `RuntimeSettings` and `NodeSettings`
+- ✅ Smart defaults applied via `FillRuntimeSettingsWithDefaults()` and `FillNodeSettingsWithDefaults()`
+- ✅ Settings used consistently throughout:
+  - `internal/graph/runtime.go`: Uses `r.settings.*` for all timeouts and buffer sizes
+  - `internal/graph/node.go`: Uses `n.settings.*` for node-specific settings
+- ✅ Fully configurable via `RuntimeOptions` and `NodeOptions`
+- ✅ Backward compatible - defaults match original hardcoded values
+
+**Resolved Magic Numbers:**
+1. ✅ Persistence queue size (was: 10) → `PersistenceJobsQueueSize`
+2. ✅ Outcome channel size (was: 1000) → `OutcomeNotificationQueueSize`
+3. ✅ Thread TTL (was: 1 hour) → `ThreadTTL`
+4. ✅ Persist timeout (was: 5s) → `PersistenceJobTimeout`
+5. ✅ Shutdown timeout (was: 10s) → `GracefulShutdownTimeout`
+6. ✅ Monitor send timeout (was: 100ms) → `OutcomeNotificationMaxInterval`
+7. ✅ Eviction interval (was: 10min) → `ThreadEvictorInterval`
+8. ✅ Node mailbox size (was: 10) → `NodeSettings.MailboxSize`
+9. ✅ Node accept timeout (was: 5s) → `NodeSettings.AcceptTimeout`
+
+**Example Usage:**
+```go
+runtime, err := builders.CreateRuntime(
+    startEdge,
+    graph.WithRuntimeSettings(graph.RuntimeSettings{
+        ThreadTTL:             2 * time.Hour,
+        PersistenceJobTimeout: 10 * time.Second,
+    }),
+)
+```
+
+**Verification:** ✅ Confirmed in:
+- `/home/rp/workspace/go/ggraph/pkg/graph/runtime_settings.go`
+- `/home/rp/workspace/go/ggraph/pkg/graph/node_settings.go`
+- `/home/rp/workspace/go/ggraph/internal/graph/runtime.go` (lines 39, 46, 70, 138, 159, 246, 371, 437)
+- `/home/rp/workspace/go/ggraph/internal/graph/node.go` (lines 29, 49, 85)
+
+---
+
 ## High Priority Issues
 
 ### ✅ **RESOLVED**: Context Now Supported Through InvokeConfig
