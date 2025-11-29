@@ -25,6 +25,15 @@ func RuntimeFactory[T g.SharedState](
 	if startEdge == nil {
 		return nil, fmt.Errorf("runtime creation failed: %w", g.ErrStartEdgeNil)
 	}
+	if startEdge.From() == nil {
+		return nil, fmt.Errorf("runtime creation failed: %w", g.ErrSourceNodeNil)
+	}
+	if startEdge.To() == nil {
+		return nil, fmt.Errorf("runtime creation failed: %w", g.ErrDestinationNodeNil)
+	}
+	if opts == nil {
+		return nil, fmt.Errorf("runtime creation failed: %w", g.ErrRuntimeOptionsNil)
+	}
 	ctx, cancelFn := context.WithCancel(context.Background())
 	rv := &runtimeImpl[T]{
 		ctx:         ctx,
@@ -142,7 +151,7 @@ func (r *runtimeImpl[T]) AddEdge(edge ...g.Edge[T]) {
 
 func (r *runtimeImpl[T]) Validate() error {
 	if r.startEdge.From() == nil {
-		return fmt.Errorf("graph validation failed: %w", g.ErrStartNodeNil)
+		return fmt.Errorf("graph validation failed: %w", g.ErrSourceNodeNil)
 	}
 
 	// Check if there's at least one path from start to an end edge

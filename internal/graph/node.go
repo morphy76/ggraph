@@ -9,7 +9,22 @@ import (
 )
 
 // NodeImplFactory creates a new instance of Node with the specified SharedState type.
-func NodeImplFactory[T g.SharedState](role g.NodeRole, name string, fn g.NodeFn[T], opt *g.NodeOptions[T]) g.Node[T] {
+func NodeImplFactory[T g.SharedState](role g.NodeRole, name string, fn g.NodeFn[T], opt *g.NodeOptions[T]) (g.Node[T], error) {
+	if name == "" {
+		return nil, fmt.Errorf("node creation failed: %w", g.ErrNodeNameEmpty)
+	}
+	if name == "StartNode" || name == "EndNode" {
+		if role != g.StartNode && role != g.EndNode {
+			return nil, fmt.Errorf("node creation failed: %w", g.ErrReservedNodeName)
+		}
+	}
+	if opt == nil {
+		return nil, fmt.Errorf("node creation failed: %w", g.ErrNodeOptionsNil)
+	}
+	if role < g.StartNode || role > g.EndNode {
+		return nil, fmt.Errorf("node creation failed: %w", g.ErrInvalidNodeRole)
+	}
+
 	useFn := fn
 	if useFn == nil {
 		useFn = func(userInput T, currentState T, notifyPartial g.NotifyPartialFn[T]) (T, error) {
@@ -27,7 +42,7 @@ func NodeImplFactory[T g.SharedState](role g.NodeRole, name string, fn g.NodeFn[
 		routePolicy: usePolicy,
 		role:        role,
 		reducer:     opt.Reducer,
-	}
+	}, nil
 }
 
 // ------------------------------------------------------------------------------

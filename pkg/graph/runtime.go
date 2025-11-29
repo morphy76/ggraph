@@ -12,8 +12,6 @@ var (
 	ErrRuntimeExecuting = errors.New("runtime is already executing")
 	// ErrStartEdgeNil indicates that the provided start edge is nil.
 	ErrStartEdgeNil = errors.New("start edge cannot be nil")
-	// ErrStartNodeNil indicates that the start node is nil.
-	ErrStartNodeNil = errors.New("start node cannot be nil")
 	// ErrNoPathToEnd indicates that there is no path from the start edge to any end edge.
 	ErrNoPathToEnd = errors.New("no path from start edge to any end edge")
 	// ErrRestoreNotSet indicates that the restore function is not set.
@@ -24,6 +22,8 @@ var (
 	ErrEvictionByInactivity = errors.New("thread evicted due to inactivity")
 	// ErrUnknownThreadID indicates that the provided thread ID is unknown.
 	ErrUnknownThreadID = errors.New("unknown thread ID")
+	// ErrRuntimeOptionsNil indicates that the provided runtime options are nil.
+	ErrRuntimeOptionsNil = errors.New("runtime options cannot be nil")
 )
 
 // Connected provides methods for building and validating the graph structure.

@@ -94,12 +94,15 @@ func TestNodeImplFactory_BasicCreation(t *testing.T) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"test-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		t.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	if node == nil {
 		t.Fatal("NodeImplFactory returned nil")
@@ -128,12 +131,15 @@ func TestNodeImplFactory_WithNilNodeFn(t *testing.T) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"test-node",
 		nil,
 		opts,
 	)
+	if err != nil {
+		t.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	if node == nil {
 		t.Fatal("NodeImplFactory returned nil")
@@ -167,12 +173,15 @@ func TestNodeImplFactory_WithNilRoutePolicy(t *testing.T) {
 		Reducer: reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"test-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		t.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	if node == nil {
 		t.Fatal("NodeImplFactory returned nil")
@@ -206,12 +215,15 @@ func TestNodeImplFactory_AllRoles(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			node := graph.NodeImplFactory[NodeTestState](
+			node, err := graph.NodeImplFactory[NodeTestState](
 				tc.role,
 				"test-node",
 				nodeFn,
 				opts,
 			)
+			if err != nil {
+				t.Fatalf("NodeImplFactory failed: %v", err)
+			}
 
 			if node.Role() != tc.role {
 				t.Errorf("Expected Role() to return %v, got %v", tc.role, node.Role())
@@ -234,12 +246,15 @@ func TestNodeImplFactory_NodeExecution(t *testing.T) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"process-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		t.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
 	userInput := NodeTestState{Value: "input", Counter: 5}
@@ -281,12 +296,15 @@ func TestNodeImplFactory_NodeExecutionWithError(t *testing.T) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"error-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		t.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
 	userInput := NodeTestState{Value: "input", Counter: 5}
@@ -328,12 +346,15 @@ func TestNodeImplFactory_PartialStateUpdates(t *testing.T) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"partial-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		t.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
 	userInput := NodeTestState{Value: "input", Counter: 0}
@@ -399,12 +420,15 @@ func TestNodeImplFactory_DifferentStateTypes(t *testing.T) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[AnotherState](
+	node, err := graph.NodeImplFactory[AnotherState](
 		g.IntermediateNode,
 		"typed-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		t.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	if node == nil {
 		t.Error("NodeImplFactory failed to create node with AnotherState")
@@ -434,12 +458,15 @@ func TestNodeImplFactory_WithReducer(t *testing.T) {
 		Reducer:       customReducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"reducer-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		t.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 10})
 	userInput := NodeTestState{Value: "input", Counter: 0}
@@ -479,12 +506,15 @@ func TestNodeImplFactory_MultipleExecutions(t *testing.T) {
 		Reducer:       reducer,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"multi-exec-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		t.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	for i := 1; i <= 3; i++ {
 		observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
@@ -525,12 +555,15 @@ func TestNodeImplFactory_NodeNamePreservation(t *testing.T) {
 	}
 
 	for _, name := range names {
-		node := graph.NodeImplFactory[NodeTestState](
+		node, err := graph.NodeImplFactory[NodeTestState](
 			g.IntermediateNode,
 			name,
 			nodeFn,
 			opts,
 		)
+		if err != nil {
+			t.Fatalf("NodeImplFactory failed: %v", err)
+		}
 
 		if node.Name() != name {
 			t.Errorf("Expected Name() to return '%s', got '%s'", name, node.Name())
@@ -549,12 +582,15 @@ func TestNodeImplFactory_NilReducer(t *testing.T) {
 		Reducer:       nil,
 	}
 
-	node := graph.NodeImplFactory[NodeTestState](
+	node, err := graph.NodeImplFactory[NodeTestState](
 		g.IntermediateNode,
 		"nil-reducer-node",
 		nodeFn,
 		opts,
 	)
+	if err != nil {
+		t.Fatalf("NodeImplFactory failed: %v", err)
+	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 10})
 	userInput := NodeTestState{Value: "input", Counter: 0}
@@ -576,5 +612,79 @@ func TestNodeImplFactory_NilReducer(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Timeout waiting for node execution")
+	}
+}
+
+// TestNodeImplFactory_EmptyName tests that creating a node with empty name returns error
+func TestNodeImplFactory_EmptyName(t *testing.T) {
+	nodeFn := func(userInput, currentState NodeTestState, notify g.NotifyPartialFn[NodeTestState]) (NodeTestState, error) {
+		return currentState, nil
+	}
+	routePolicy, _ := graph.RouterPolicyImplFactory[NodeTestState](graph.AnyRoute[NodeTestState])
+	opts := &g.NodeOptions[NodeTestState]{
+		RoutingPolicy: routePolicy,
+		Reducer:       graph.Replacer[NodeTestState],
+	}
+
+	_, err := graph.NodeImplFactory[NodeTestState](g.IntermediateNode, "", nodeFn, opts)
+	if err == nil {
+		t.Error("Expected error when creating node with empty name, got none")
+	} else if !errors.Is(err, g.ErrNodeNameEmpty) {
+		t.Errorf("Expected error to wrap ErrNodeNameEmpty, got %v", err)
+	}
+}
+
+// TestNodeImplFactory_ReservedNameNonReservedRole tests that using reserved name with non-reserved role returns error
+func TestNodeImplFactory_ReservedNameNonReservedRole(t *testing.T) {
+	nodeFn := func(userInput, currentState NodeTestState, notify g.NotifyPartialFn[NodeTestState]) (NodeTestState, error) {
+		return currentState, nil
+	}
+	routePolicy, _ := graph.RouterPolicyImplFactory[NodeTestState](graph.AnyRoute[NodeTestState])
+	opts := &g.NodeOptions[NodeTestState]{
+		RoutingPolicy: routePolicy,
+		Reducer:       graph.Replacer[NodeTestState],
+	}
+
+	// Try to create an IntermediateNode with reserved name
+	_, err := graph.NodeImplFactory[NodeTestState](g.IntermediateNode, "StartNode", nodeFn, opts)
+	if err == nil {
+		t.Error("Expected error when creating intermediate node with reserved name, got none")
+	} else if !errors.Is(err, g.ErrReservedNodeName) {
+		t.Errorf("Expected error to wrap ErrReservedNodeName, got %v", err)
+	}
+}
+
+// TestNodeImplFactory_NilOptions tests that creating a node with nil options returns error
+func TestNodeImplFactory_NilOptions(t *testing.T) {
+	nodeFn := func(userInput, currentState NodeTestState, notify g.NotifyPartialFn[NodeTestState]) (NodeTestState, error) {
+		return currentState, nil
+	}
+
+	_, err := graph.NodeImplFactory[NodeTestState](g.IntermediateNode, "test-node", nodeFn, nil)
+	if err == nil {
+		t.Error("Expected error when creating node with nil options, got none")
+	} else if !errors.Is(err, g.ErrNodeOptionsNil) {
+		t.Errorf("Expected error to wrap ErrNodeOptionsNil, got %v", err)
+	}
+}
+
+// TestNodeImplFactory_InvalidRole tests that creating a node with invalid role returns error
+func TestNodeImplFactory_InvalidRole(t *testing.T) {
+	nodeFn := func(userInput, currentState NodeTestState, notify g.NotifyPartialFn[NodeTestState]) (NodeTestState, error) {
+		return currentState, nil
+	}
+	routePolicy, _ := graph.RouterPolicyImplFactory[NodeTestState](graph.AnyRoute[NodeTestState])
+	opts := &g.NodeOptions[NodeTestState]{
+		RoutingPolicy: routePolicy,
+		Reducer:       graph.Replacer[NodeTestState],
+	}
+
+	// Use an invalid role value (outside the valid range)
+	invalidRole := g.NodeRole(999)
+	_, err := graph.NodeImplFactory[NodeTestState](invalidRole, "test-node", nodeFn, opts)
+	if err == nil {
+		t.Error("Expected error when creating node with invalid role, got none")
+	} else if !errors.Is(err, g.ErrInvalidNodeRole) {
+		t.Errorf("Expected error to wrap ErrInvalidNodeRole, got %v", err)
 	}
 }
