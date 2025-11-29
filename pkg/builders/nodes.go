@@ -43,10 +43,9 @@ func NewNode[T g.SharedState](name string, fn g.NodeFn[T], opts ...g.NodeOption[
 		opt.Apply(useOpts)
 	}
 
-	policy := useOpts.RoutingPolicy
-	if policy == nil {
+	if useOpts.RoutingPolicy == nil {
 		var err error
-		policy, err = CreateAnyRoutePolicy[T]()
+		useOpts.RoutingPolicy, err = CreateAnyRoutePolicy[T]()
 		if err != nil {
 			return nil, err
 		}
