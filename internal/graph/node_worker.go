@@ -1,7 +1,6 @@
 package graph
 
 import (
-	"runtime"
 	"sync"
 )
 
@@ -11,18 +10,14 @@ type workerPool struct {
 	wg        sync.WaitGroup
 }
 
-func newWorkerPool(workers int, queueSize int, coreMultiplier int) *workerPool {
-	useCoreMultiplier := coreMultiplier
-	if useCoreMultiplier <= 0 {
-		useCoreMultiplier = 10
-	}
-	useWorkers := workers
-	if useWorkers <= 0 {
-		useWorkers = runtime.NumCPU() * useCoreMultiplier
-	}
+func newWorkerPool(workers int, queueSize int) *workerPool {
 	useQueueSize := queueSize
 	if useQueueSize <= 0 {
 		useQueueSize = 100
+	}
+	useWorkers := workers
+	if useWorkers <= 0 {
+		useWorkers = 4
 	}
 
 	pool := &workerPool{

@@ -5,9 +5,8 @@ type RuntimeOptions[T SharedState] struct {
 	InitialState T
 	Memory       Memory[T]
 
-	WorkerCount               int
-	WorkerCountCoreMultiplier int
-	WorkerQueueSize           int
+	WorkerCount     int
+	WorkerQueueSize int
 }
 
 // RuntimeOption is a functional option for configuring a graph runtime.
@@ -84,11 +83,10 @@ func WithMemory[T SharedState](memory Memory[T]) RuntimeOption[T] {
 // Example:
 //
 //	runtime, err := builders.CreateRuntime(startEdge, stateMonitorCh, WithWorkerPool(10, 200))
-func WithWorkerPool[T SharedState](workerCount int, workerQueueSize int, workerCountCoreMultiplier int) RuntimeOption[T] {
+func WithWorkerPool[T SharedState](workerCount int, workerQueueSize int) RuntimeOption[T] {
 	return RuntimeOptionFunc[T](func(r *RuntimeOptions[T]) error {
 		r.WorkerCount = workerCount
 		r.WorkerQueueSize = workerQueueSize
-		r.WorkerCountCoreMultiplier = workerCountCoreMultiplier
 		return nil
 	})
 }

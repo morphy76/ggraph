@@ -46,7 +46,7 @@ func RuntimeFactory[T g.SharedState](
 		startEdge: startEdge,
 		edges:     []g.Edge[T]{},
 
-		workerPool: newWorkerPool(opts.WorkerCount, opts.WorkerQueueSize, opts.WorkerCountCoreMultiplier),
+		workerPool: newWorkerPool(opts.WorkerCount, opts.WorkerQueueSize),
 
 		initialState:    opts.InitialState,
 		state:           make(map[string]T),

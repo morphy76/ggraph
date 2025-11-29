@@ -1,7 +1,6 @@
 package graph
 
 import (
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,7 +12,6 @@ func TestNewWorkerPool_DefaultValues(t *testing.T) {
 		name            string
 		workers         int
 		queueSize       int
-		coreMultiplier  int
 		expectedWorkers int
 		expectedQueue   int
 	}{
@@ -21,15 +19,13 @@ func TestNewWorkerPool_DefaultValues(t *testing.T) {
 			name:            "all defaults",
 			workers:         0,
 			queueSize:       0,
-			coreMultiplier:  0,
-			expectedWorkers: runtime.NumCPU() * 10,
+			expectedWorkers: 4,
 			expectedQueue:   100,
 		},
 		{
 			name:            "custom workers only",
 			workers:         5,
 			queueSize:       0,
-			coreMultiplier:  0,
 			expectedWorkers: 5,
 			expectedQueue:   100,
 		},
@@ -37,55 +33,35 @@ func TestNewWorkerPool_DefaultValues(t *testing.T) {
 			name:            "custom queue size only",
 			workers:         0,
 			queueSize:       50,
-			coreMultiplier:  0,
-			expectedWorkers: runtime.NumCPU() * 10,
+			expectedWorkers: 4,
 			expectedQueue:   50,
-		},
-		{
-			name:            "custom core multiplier only",
-			workers:         0,
-			queueSize:       0,
-			coreMultiplier:  5,
-			expectedWorkers: runtime.NumCPU() * 5,
-			expectedQueue:   100,
 		},
 		{
 			name:            "all custom values",
 			workers:         8,
 			queueSize:       200,
-			coreMultiplier:  3,
 			expectedWorkers: 8,
 			expectedQueue:   200,
-		},
-		{
-			name:            "negative core multiplier uses default",
-			workers:         0,
-			queueSize:       0,
-			coreMultiplier:  -1,
-			expectedWorkers: runtime.NumCPU() * 10,
-			expectedQueue:   100,
 		},
 		{
 			name:            "negative workers uses default",
 			workers:         -1,
 			queueSize:       0,
-			coreMultiplier:  0,
-			expectedWorkers: runtime.NumCPU() * 10,
+			expectedWorkers: 4,
 			expectedQueue:   100,
 		},
 		{
 			name:            "negative queue size uses default",
 			workers:         0,
 			queueSize:       -1,
-			coreMultiplier:  0,
-			expectedWorkers: runtime.NumCPU() * 10,
+			expectedWorkers: 4,
 			expectedQueue:   100,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pool := newWorkerPool(tt.workers, tt.queueSize, tt.coreMultiplier)
+			pool := newWorkerPool(tt.workers, tt.queueSize)
 			defer pool.Shutdown()
 
 			if pool.workers != tt.expectedWorkers {
@@ -100,7 +76,7 @@ func TestNewWorkerPool_DefaultValues(t *testing.T) {
 }
 
 func TestWorkerPool_Submit(t *testing.T) {
-	pool := newWorkerPool(4, 10, 1)
+	pool := newWorkerPool(4, 10)
 
 	var counter atomic.Int32
 	numTasks := 100
@@ -120,7 +96,7 @@ func TestWorkerPool_Submit(t *testing.T) {
 
 func TestWorkerPool_ConcurrentExecution(t *testing.T) {
 	workers := 4
-	pool := newWorkerPool(workers, 10, 1)
+	pool := newWorkerPool(workers, 10)
 
 	var activeWorkers atomic.Int32
 	var maxConcurrent atomic.Int32
@@ -165,7 +141,7 @@ func TestWorkerPool_ConcurrentExecution(t *testing.T) {
 }
 
 func TestWorkerPool_Shutdown(t *testing.T) {
-	pool := newWorkerPool(2, 5, 1)
+	pool := newWorkerPool(2, 5)
 
 	var counter atomic.Int32
 	numTasks := 10
@@ -186,7 +162,7 @@ func TestWorkerPool_Shutdown(t *testing.T) {
 }
 
 func TestWorkerPool_ShutdownMultipleTimes(t *testing.T) {
-	pool := newWorkerPool(2, 5, 1)
+	pool := newWorkerPool(2, 5)
 
 	var counter atomic.Int32
 	pool.Submit(func() {
@@ -213,7 +189,7 @@ func TestWorkerPool_ShutdownMultipleTimes(t *testing.T) {
 
 func TestWorkerPool_QueueBlocking(t *testing.T) {
 	queueSize := 5
-	pool := newWorkerPool(1, queueSize, 1)
+	pool := newWorkerPool(1, queueSize)
 
 	var blockingChan = make(chan struct{})
 	var counter atomic.Int32
@@ -269,7 +245,7 @@ func TestWorkerPool_QueueBlocking(t *testing.T) {
 }
 
 func TestWorkerPool_OrderIndependence(t *testing.T) {
-	pool := newWorkerPool(4, 10, 1)
+	pool := newWorkerPool(4, 10)
 
 	numTasks := 100
 	results := make([]int, numTasks)
@@ -303,7 +279,7 @@ func TestWorkerPool_PanicRecovery(t *testing.T) {
 	// When a task panics, it crashes the goroutine and affects other tasks
 	// Future enhancement: Add panic recovery in worker goroutines
 
-	pool := newWorkerPool(2, 5, 1)
+	pool := newWorkerPool(2, 5)
 
 	var counter atomic.Int32
 
@@ -331,7 +307,7 @@ func TestWorkerPool_StressTest(t *testing.T) {
 		t.Skip("skipping stress test in short mode")
 	}
 
-	pool := newWorkerPool(8, 100, 1)
+	pool := newWorkerPool(8, 100)
 
 	var counter atomic.Int32
 	numTasks := 10000
@@ -356,7 +332,7 @@ func TestWorkerPool_StressTest(t *testing.T) {
 }
 
 func TestWorkerPool_EmptyShutdown(t *testing.T) {
-	pool := newWorkerPool(2, 5, 1)
+	pool := newWorkerPool(2, 5)
 
 	// Shutdown without submitting any tasks
 	pool.Shutdown()
@@ -365,7 +341,7 @@ func TestWorkerPool_EmptyShutdown(t *testing.T) {
 }
 
 func TestWorkerPool_RapidSubmitShutdown(t *testing.T) {
-	pool := newWorkerPool(2, 5, 1)
+	pool := newWorkerPool(2, 5)
 
 	var counter atomic.Int32
 	pool.Submit(func() {
@@ -394,7 +370,7 @@ func TestWorkerPool_WorkerCount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pool := newWorkerPool(tt.workers, 10, 1)
+			pool := newWorkerPool(tt.workers, 10)
 
 			if pool.workers != tt.expected {
 				t.Errorf("workers = %d, want %d", pool.workers, tt.expected)
