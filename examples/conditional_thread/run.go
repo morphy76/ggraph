@@ -28,6 +28,9 @@ func main() {
 		}
 		return nil
 	})
+	if err != nil {
+		log.Fatalf("Routing policy creation failed: %v", err)
+	}
 	routerNode, err := b.CreateRouter("operation_routing", routingPolicy)
 	if err != nil {
 		log.Fatalf("Router creation failed: %v", err)
