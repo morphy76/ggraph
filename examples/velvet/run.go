@@ -56,6 +56,9 @@ var TeacherNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, mo
 			[]a.Message{systemMsg, a.CreateMessage(a.User, "Genera una domanda")},
 			conversationOptions...,
 		)
+		if err != nil {
+			return currentState, fmt.Errorf("failed to create conversation options: %w", err)
+		}
 
 		openAIOpts := o.ConvertConversationOptions(useOpts)
 
