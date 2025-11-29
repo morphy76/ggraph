@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -282,34 +283,48 @@ func BenchmarkRuntime_WithPersistence(b *testing.B) {
 		mu:     sync.RWMutex{},
 	}
 
-	stateMonitorCh := make(chan g.StateMonitorEntry[RuntimeTestState], 1000)
+	stateMonitorCh := make(chan g.StateMonitorEntry[RuntimeTestState], 10000)
+	completions := make(map[string]chan struct{})
+	var completionsMu sync.Mutex
+
+	// Single goroutine to handle all state monitor events
+	go func() {
+		for entry := range stateMonitorCh {
+			if !entry.Running && entry.Error == nil {
+				completionsMu.Lock()
+				if ch, exists := completions[entry.ThreadID]; exists {
+					close(ch)
+					delete(completions, entry.ThreadID)
+				}
+				completionsMu.Unlock()
+			}
+		}
+	}()
+
 	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{
 		InitialState: RuntimeTestState{Counter: 0},
 		Memory:       memory,
 	})
-	defer runtime.Shutdown()
-	defer close(stateMonitorCh)
+	defer func() {
+		runtime.Shutdown()
+		close(stateMonitorCh)
+	}()
 
 	runtime.AddEdge(endEdge)
-
-	// Drain state monitor channel
-	go func() {
-		for range stateMonitorCh {
-		}
-	}()
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		threadID := runtime.Invoke(RuntimeTestState{}, g.InvokeConfigThreadID("thread"))
-		// Wait for completion
-		for {
-			state := runtime.CurrentState(threadID)
-			if state.Counter > 0 {
-				break
-			}
-		}
+		completed := make(chan struct{})
+		threadID := fmt.Sprintf("thread-%d", i)
+
+		completionsMu.Lock()
+		completions[threadID] = completed
+		completionsMu.Unlock()
+
+		runtime.Invoke(RuntimeTestState{}, g.InvokeConfigThreadID(threadID))
+		<-completed
 	}
 }
 
@@ -354,10 +369,8 @@ func BenchmarkRuntime_ListThreads(b *testing.B) {
 		}
 	}()
 	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{})
-	defer func() {
-		runtime.Shutdown()
-		close(stateMonitorCh)
-	}()
+	defer close(stateMonitorCh)
+	defer runtime.Shutdown()
 
 	// Create multiple threads
 	for i := 0; i < 100; i++ {
