@@ -44,7 +44,7 @@ type mockRouterNode struct {
 	name string
 }
 
-func (m *mockRouterNode) Accept(userInput RouterTestState, runtime g.StateObserver[RouterTestState], config g.InvokeConfig) {
+func (m *mockRouterNode) Accept(userInput RouterTestState, stateObserver g.StateObserver[RouterTestState], nodeExecutor g.NodeExecutor, config g.InvokeConfig) {
 }
 func (m *mockRouterNode) Name() string                                { return m.name }
 func (m *mockRouterNode) RoutePolicy() g.RoutePolicy[RouterTestState] { return nil }

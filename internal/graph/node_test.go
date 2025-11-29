@@ -26,6 +26,12 @@ type mockStateObserver struct {
 	notificationsCh chan stateNotification
 }
 
+// mockNodeExecutor is a minimal NodeExecutor implementation for testing
+var _ g.NodeExecutor = (*mockNodeExecutor)(nil)
+
+type mockNodeExecutor struct {
+}
+
 type stateNotification struct {
 	nodeName    string
 	userInput   NodeTestState
@@ -79,6 +85,16 @@ func (m *mockStateObserver) getNotifications() []stateNotification {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return append([]stateNotification{}, m.notifications...)
+}
+
+func newMockNodeExecutor() *mockNodeExecutor {
+	return &mockNodeExecutor{}
+}
+
+func (m *mockNodeExecutor) Submit(task func()) {
+	go func() {
+		task()
+	}()
 }
 
 func TestNodeImplFactory_BasicCreation(t *testing.T) {
@@ -146,9 +162,10 @@ func TestNodeImplFactory_WithNilNodeFn(t *testing.T) {
 	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
+	executor := newMockNodeExecutor()
 	userInput := NodeTestState{Value: "input", Counter: 5}
 
-	node.Accept(userInput, observer, g.DefaultInvokeConfig())
+	node.Accept(userInput, observer, executor, g.DefaultInvokeConfig())
 
 	select {
 	case notification := <-observer.notificationsCh:
@@ -257,9 +274,10 @@ func TestNodeImplFactory_NodeExecution(t *testing.T) {
 	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
+	executor := newMockNodeExecutor()
 	userInput := NodeTestState{Value: "input", Counter: 5}
 
-	node.Accept(userInput, observer, g.DefaultInvokeConfig())
+	node.Accept(userInput, observer, executor, g.DefaultInvokeConfig())
 
 	select {
 	case notification := <-observer.notificationsCh:
@@ -307,9 +325,10 @@ func TestNodeImplFactory_NodeExecutionWithError(t *testing.T) {
 	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
+	executor := newMockNodeExecutor()
 	userInput := NodeTestState{Value: "input", Counter: 5}
 
-	node.Accept(userInput, observer, g.DefaultInvokeConfig())
+	node.Accept(userInput, observer, executor, g.DefaultInvokeConfig())
 
 	select {
 	case notification := <-observer.notificationsCh:
@@ -357,9 +376,10 @@ func TestNodeImplFactory_PartialStateUpdates(t *testing.T) {
 	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
+	executor := newMockNodeExecutor()
 	userInput := NodeTestState{Value: "input", Counter: 0}
 
-	node.Accept(userInput, observer, g.DefaultInvokeConfig())
+	node.Accept(userInput, observer, executor, g.DefaultInvokeConfig())
 
 	notifications := make([]stateNotification, 0)
 	timeout := time.After(2 * time.Second)
@@ -469,10 +489,11 @@ func TestNodeImplFactory_WithReducer(t *testing.T) {
 	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 10})
+	executor := newMockNodeExecutor()
 	userInput := NodeTestState{Value: "input", Counter: 0}
 
 	defaultConfig := g.DefaultInvokeConfig()
-	node.Accept(userInput, observer, defaultConfig)
+	node.Accept(userInput, observer, executor, defaultConfig)
 
 	select {
 	case notification := <-observer.notificationsCh:
@@ -518,9 +539,10 @@ func TestNodeImplFactory_MultipleExecutions(t *testing.T) {
 
 	for i := 1; i <= 3; i++ {
 		observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
+		executor := newMockNodeExecutor()
 		userInput := NodeTestState{Value: "input", Counter: i}
 
-		node.Accept(userInput, observer, g.DefaultInvokeConfig())
+		node.Accept(userInput, observer, executor, g.DefaultInvokeConfig())
 
 		select {
 		case notification := <-observer.notificationsCh:
@@ -593,10 +615,11 @@ func TestNodeImplFactory_NilReducer(t *testing.T) {
 	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 10})
+	executor := newMockNodeExecutor()
 	userInput := NodeTestState{Value: "input", Counter: 0}
 
 	defaultConfig := g.DefaultInvokeConfig()
-	node.Accept(userInput, observer, defaultConfig)
+	node.Accept(userInput, observer, executor, defaultConfig)
 
 	select {
 	case notification := <-observer.notificationsCh:

@@ -46,6 +46,8 @@ func RuntimeFactory[T g.SharedState](
 		startEdge: startEdge,
 		edges:     []g.Edge[T]{},
 
+		workerPool: newWorkerPool(opts.WorkerCount, opts.WorkerQueueSize, opts.WorkerCountCoreMultiplier),
+
 		initialState:    opts.InitialState,
 		state:           make(map[string]T),
 		stateChangeLock: make(map[string]*sync.RWMutex),
@@ -79,6 +81,7 @@ var _ g.Runtime[g.SharedState] = (*runtimeImpl[g.SharedState])(nil)
 var _ g.StateObserver[g.SharedState] = (*runtimeImpl[g.SharedState])(nil)
 var _ g.Persistent[g.SharedState] = (*runtimeImpl[g.SharedState])(nil)
 var _ g.Threaded = (*runtimeImpl[g.SharedState])(nil)
+var _ g.NodeExecutor = (*runtimeImpl[g.SharedState])(nil)
 
 type nodeFnReturnStruct[T g.SharedState] struct {
 	node        g.Node[T]
@@ -100,6 +103,8 @@ type runtimeImpl[T g.SharedState] struct {
 
 	startEdge g.Edge[T]
 	edges     []g.Edge[T]
+
+	workerPool *workerPool
 
 	initialState    T
 	state           map[string]T
@@ -141,7 +146,7 @@ func (r *runtimeImpl[T]) Invoke(userInput T, configs ...g.InvokeConfig) string {
 		return useConfig.ThreadID
 	}
 
-	r.startEdge.From().Accept(userInput, r, useConfig)
+	r.startEdge.From().Accept(userInput, r, r, useConfig)
 	return useConfig.ThreadID
 }
 
@@ -182,6 +187,7 @@ func (r *runtimeImpl[T]) Shutdown() {
 	case <-ctx.Done():
 		close(r.pendingPersist)
 		close(r.outcomeCh)
+		r.workerPool.Shutdown()
 	}
 }
 
@@ -242,6 +248,10 @@ func (r *runtimeImpl[T]) ListThreads() []string {
 		threads = append(threads, threadID)
 	}
 	return threads
+}
+
+func (r *runtimeImpl[T]) Submit(task func()) {
+	r.workerPool.Submit(task)
 }
 
 func (r *runtimeImpl[T]) persistState(threadID string) error {
@@ -368,7 +378,7 @@ func (r *runtimeImpl[T]) onNodeOutcome() {
 					continue
 				}
 
-				nextNode.Accept(result.userInput, r, result.config)
+				nextNode.Accept(result.userInput, r, r, result.config)
 			}
 		}
 	}

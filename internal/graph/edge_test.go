@@ -18,7 +18,7 @@ type mockNode struct {
 	role g.NodeRole
 }
 
-func (m *mockNode) Accept(userInput TestState, runtime g.StateObserver[TestState], config g.InvokeConfig) {
+func (m *mockNode) Accept(userInput TestState, stateObserver g.StateObserver[TestState], executor g.NodeExecutor, config g.InvokeConfig) {
 }
 func (m *mockNode) Name() string                          { return m.name }
 func (m *mockNode) RoutePolicy() g.RoutePolicy[TestState] { return nil }
@@ -32,10 +32,11 @@ type mockNodeGeneric[T g.SharedState] struct {
 	role g.NodeRole
 }
 
-func (m *mockNodeGeneric[T]) Accept(userInput T, runtime g.StateObserver[T], config g.InvokeConfig) {}
-func (m *mockNodeGeneric[T]) Name() string                                                          { return m.name }
-func (m *mockNodeGeneric[T]) RoutePolicy() g.RoutePolicy[T]                                         { return nil }
-func (m *mockNodeGeneric[T]) Role() g.NodeRole                                                      { return m.role }
+func (m *mockNodeGeneric[T]) Accept(userInput T, stateObserver g.StateObserver[T], executor g.NodeExecutor, config g.InvokeConfig) {
+}
+func (m *mockNodeGeneric[T]) Name() string                  { return m.name }
+func (m *mockNodeGeneric[T]) RoutePolicy() g.RoutePolicy[T] { return nil }
+func (m *mockNodeGeneric[T]) Role() g.NodeRole              { return m.role }
 
 func TestEdgeImplFactory_BasicCreation(t *testing.T) {
 	fromNode := &mockNode{name: "from", role: g.IntermediateNode}

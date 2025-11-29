@@ -59,6 +59,7 @@ func BenchmarkNode_Accept(b *testing.B) {
 	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
+	executor := newMockNodeExecutor()
 	userInput := NodeTestState{Value: "input", Counter: 5}
 
 	// Drain notifications
@@ -71,7 +72,7 @@ func BenchmarkNode_Accept(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		node.Accept(userInput, observer, g.DefaultInvokeConfig())
+		node.Accept(userInput, observer, executor, g.DefaultInvokeConfig())
 	}
 }
 
@@ -100,6 +101,7 @@ func BenchmarkNode_SimpleExecution(b *testing.B) {
 	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
+	executor := newMockNodeExecutor()
 	userInput := NodeTestState{Value: "input", Counter: 0}
 
 	// Drain notifications in background
@@ -119,7 +121,7 @@ func BenchmarkNode_SimpleExecution(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		node.Accept(userInput, observer, g.DefaultInvokeConfig())
+		node.Accept(userInput, observer, executor, g.DefaultInvokeConfig())
 	}
 
 	<-done
@@ -152,6 +154,7 @@ func BenchmarkNode_ComplexStateTransformation(b *testing.B) {
 	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "state", Counter: 10})
+	executor := newMockNodeExecutor()
 	userInput := NodeTestState{Value: "input", Counter: 5}
 
 	// Drain notifications
@@ -164,7 +167,7 @@ func BenchmarkNode_ComplexStateTransformation(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		node.Accept(userInput, observer, g.DefaultInvokeConfig())
+		node.Accept(userInput, observer, executor, g.DefaultInvokeConfig())
 	}
 }
 
@@ -199,6 +202,7 @@ func BenchmarkNode_WithCustomReducer(b *testing.B) {
 	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 10})
+	executor := newMockNodeExecutor()
 	userInput := NodeTestState{Value: "input", Counter: 5}
 
 	// Drain notifications
@@ -211,7 +215,7 @@ func BenchmarkNode_WithCustomReducer(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		node.Accept(userInput, observer, g.DefaultInvokeConfig())
+		node.Accept(userInput, observer, executor, g.DefaultInvokeConfig())
 	}
 }
 
@@ -245,6 +249,7 @@ func BenchmarkNode_PartialUpdates(b *testing.B) {
 	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
+	executor := newMockNodeExecutor()
 	userInput := NodeTestState{Value: "input", Counter: 0}
 
 	// Drain notifications (4 per execution: 3 partial + 1 final)
@@ -257,7 +262,7 @@ func BenchmarkNode_PartialUpdates(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		node.Accept(userInput, observer, g.DefaultInvokeConfig())
+		node.Accept(userInput, observer, executor, g.DefaultInvokeConfig())
 	}
 }
 
@@ -379,6 +384,7 @@ func BenchmarkNode_ConcurrentExecution(b *testing.B) {
 	}
 
 	observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
+	executor := newMockNodeExecutor()
 
 	// Drain notifications
 	go func() {
@@ -393,7 +399,7 @@ func BenchmarkNode_ConcurrentExecution(b *testing.B) {
 		i := 0
 		for pb.Next() {
 			userInput := NodeTestState{Value: "input", Counter: i}
-			node.Accept(userInput, observer, g.DefaultInvokeConfig())
+			node.Accept(userInput, observer, executor, g.DefaultInvokeConfig())
 			i++
 		}
 	})
@@ -432,6 +438,7 @@ func BenchmarkNode_DifferentRoles(b *testing.B) {
 			}
 
 			observer := newMockStateObserver(NodeTestState{Value: "initial", Counter: 0})
+			executor := newMockNodeExecutor()
 			userInput := NodeTestState{Value: "input", Counter: 0}
 
 			// Drain notifications
@@ -444,7 +451,7 @@ func BenchmarkNode_DifferentRoles(b *testing.B) {
 			b.ReportAllocs()
 
 			for i := 0; i < b.N; i++ {
-				node.Accept(userInput, observer, g.DefaultInvokeConfig())
+				node.Accept(userInput, observer, executor, g.DefaultInvokeConfig())
 			}
 		})
 	}

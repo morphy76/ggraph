@@ -74,9 +74,10 @@ type Node[T SharedState] interface {
 	//
 	// Parameters:
 	//   - userInput: The original input provided to Runtime.Invoke().
-	//   - runtime: The StateObserver that tracks state changes and execution flow.
+	//   - stateObserver: The StateObserver that tracks state changes and execution flow.
+	//   - nodeExecutor: The NodeExecutor that manages node execution tasks.
 	//   - config: The configuration settings for the invocation.
-	Accept(userInput T, runtime StateObserver[T], config InvokeConfig)
+	Accept(userInput T, stateObserver StateObserver[T], nodeExecutor NodeExecutor, config InvokeConfig)
 
 	// Name returns the unique identifier for this node.
 	//

@@ -26,6 +26,21 @@ var (
 	ErrRuntimeOptionsNil = errors.New("runtime options cannot be nil")
 )
 
+// NodeExecutor defines an interface for submitting tasks to be executed.
+type NodeExecutor interface {
+	// Submit adds a task to be executed.
+	//
+	// Parameters:
+	//   - task: A function representing the task to execute.
+	//
+	// Example:
+	//
+	//	executor.Submit(func() {
+	//	    // Task logic here
+	//	})
+	Submit(task func())
+}
+
 // Connected provides methods for building and validating the graph structure.
 //
 // This interface allows you to add edges to construct the graph topology and
