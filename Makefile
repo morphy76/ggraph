@@ -92,5 +92,3 @@ run-completion-ex: ## Run the AIW completion agent example
 	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/completion/run.go
 run-tool-ex: ## Run the AIW tool agent example
 	@$(GO) run $(GOFLAGS) $(LDFLAGS) $(GCFLAGS) ./examples/tool/run.go
-run-all-ex: run-conditional-ex run-thread-ex run-helloworld-ex run-loop-ex run-interrupt-ex run-persistence-ex run-velvet-ex run-completion-ex run-tool-ex## Run all graph examples
-	@echo "✅ All examples executed"
