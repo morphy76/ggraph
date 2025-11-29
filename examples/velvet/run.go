@@ -94,6 +94,9 @@ var StudentNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, mo
 			[]a.Message{systemMsg, a.CreateMessage(a.User, question)},
 			conversationOptions...,
 		)
+		if err != nil {
+			return currentState, fmt.Errorf("failed to prepare student options: %w", err)
+		}
 
 		openAIOpts := o.ConvertConversationOptions(useOpts)
 
