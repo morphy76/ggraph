@@ -137,6 +137,9 @@ var EvaluatorNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, 
 			[]a.Message{systemMsg, a.CreateMessage(a.User, prompt)},
 			conversationOptions...,
 		)
+		if err != nil {
+			return currentState, fmt.Errorf("failed to create conversation options: %w", err)
+		}
 
 		openAIOpts := o.ConvertConversationOptions(useOpts)
 
