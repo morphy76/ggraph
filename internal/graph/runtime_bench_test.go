@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
 
@@ -369,8 +370,8 @@ func BenchmarkRuntime_ListThreads(b *testing.B) {
 		}
 	}()
 	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{})
-	defer close(stateMonitorCh)
 	defer runtime.Shutdown()
+	defer close(stateMonitorCh)
 
 	// Create multiple threads
 	for i := 0; i < 100; i++ {
@@ -448,4 +449,36 @@ func BenchmarkRuntime_ConditionalRouting(b *testing.B) {
 			}
 		}
 	}
+}
+
+func BenchmarkStateAccess(b *testing.B) {
+	policy, _ := RouterPolicyImplFactory(AnyRoute[RuntimeTestState])
+	startNode := newMockRuntimeNode("StartNode", g.StartNode, nil, policy)
+	node1 := newMockRuntimeNode("Node1", g.IntermediateNode, nil, policy)
+	startEdge := &mockRuntimeEdge{from: startNode, to: node1, role: g.StartEdge}
+	initialState := RuntimeTestState{Value: "initial", Counter: 0}
+
+	stateMonitorCh := make(chan g.StateMonitorEntry[RuntimeTestState], 10)
+	// Drain channel in background
+	go func(ch chan g.StateMonitorEntry[RuntimeTestState]) {
+		for range ch {
+		}
+	}(stateMonitorCh)
+
+	runtime, err := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{InitialState: initialState})
+	if err != nil {
+		b.Fatalf("Failed to create runtime: %v", err)
+	}
+	defer func() {
+		runtime.Shutdown()
+		close(stateMonitorCh)
+	}()
+
+	// Simulate high concurrency
+	b.RunParallel(func(pb *testing.PB) {
+		threadID := uuid.New().String()
+		for pb.Next() {
+			_ = runtime.CurrentState(threadID)
+		}
+	})
 }

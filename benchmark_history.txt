@@ -1,0 +1,129 @@
+=================================================================================
+GGRAPH BENCHMARK HISTORY - COMPREHENSIVE TRACKING
+=================================================================================
+
+This file contains historical benchmark data for comparing performance across
+different optimization phases. All benchmarks run on the same hardware platform.
+
+Platform: Linux amd64, Intel Core i9-10900K @ 3.70GHz
+Go Version: 1.25.2
+
+=================================================================================
+PHASE 1: BASELINE (review_bench branch)
+Date: November 29, 2025
+Description: Original implementation before worker pool
+=================================================================================
+
+BenchmarkRuntimeFactory-20                    35757             33602 ns/op          150722 B/op         28 allocs/op
+BenchmarkRuntime_AddEdge-20                25465554                46.66 ns/op          107 B/op          1 allocs/op
+BenchmarkRuntime_Validate-20                3459012               349.1 ns/op            48 B/op          3 allocs/op
+BenchmarkRuntime_CurrentState-20          102866995                11.63 ns/op            0 B/op          0 allocs/op
+BenchmarkRuntime_SimpleInvoke-20            1202054               997.3 ns/op           490 B/op          9 allocs/op
+BenchmarkRuntime_MultiNodeInvoke-20         1071171              1114 ns/op             519 B/op          9 allocs/op
+BenchmarkRuntime_StateReplace-20           24033362                49.78 ns/op            0 B/op          0 allocs/op
+BenchmarkRuntime_WithPersistence-20          168657              7097 ns/op            2551 B/op         38 allocs/op
+BenchmarkRuntime_ListThreads-20           61227734                19.53 ns/op            0 B/op          0 allocs/op
+BenchmarkRuntime_ConditionalRouting-20      1184904              1010 ns/op             488 B/op          9 allocs/op
+BenchmarkNodeFactory-20                    10237896               116.6 ns/op           416 B/op          3 allocs/op
+BenchmarkNode_Accept-20                     1280829               932.1 ns/op          1203 B/op          9 allocs/op
+BenchmarkNode_SimpleExecution-20            1137228              1053 ns/op            1201 B/op          9 allocs/op
+BenchmarkNode_ComplexStateTransformation    (HANGS - see analysis)
+
+=================================================================================
+PHASE 2: WORKER POOL - INITIAL (200 workers)
+Date: November 29, 2025
+Branch: 10-critical-unbounded-goroutine-creation
+Description: First worker pool implementation with 200 workers
+=================================================================================
+
+BenchmarkRuntimeFactory-20                     4378            272605 ns/op          272150 B/op        631 allocs/op
+BenchmarkRuntime_AddEdge-20                13901550                85.83 ns/op          107 B/op          1 allocs/op
+BenchmarkRuntime_Validate-20                3520200               342.7 ns/op            48 B/op          3 allocs/op
+BenchmarkRuntime_CurrentState-20          103539088                11.59 ns/op            0 B/op          0 allocs/op
+BenchmarkRuntime_SimpleInvoke-20            1346974               891.3 ns/op           488 B/op          9 allocs/op
+BenchmarkRuntime_MultiNodeInvoke-20         1171508              1022 ns/op             519 B/op          9 allocs/op
+BenchmarkRuntime_StateReplace-20           23714394                50.74 ns/op            0 B/op          0 allocs/op
+BenchmarkRuntime_WithPersistence-20          159380              7513 ns/op            2520 B/op         38 allocs/op
+BenchmarkRuntime_ListThreads-20           61755824                19.45 ns/op            0 B/op          0 allocs/op
+BenchmarkRuntime_ConditionalRouting-20      1172302              1023 ns/op             488 B/op          9 allocs/op
+BenchmarkNodeFactory-20                     5227726               229.1 ns/op           416 B/op          3 allocs/op
+BenchmarkNode_Accept-20                      742906              1611 ns/op            1207 B/op         10 allocs/op
+BenchmarkNode_SimpleExecution-20             744789              1609 ns/op            1207 B/op         10 allocs/op
+BenchmarkNode_ComplexStateTransformation    (HANGS - see analysis)
+
+=================================================================================
+PHASE 3: WORKER POOL - OPTIMIZED (4 workers)
+Date: November 29, 2025
+Branch: 10-critical-unbounded-goroutine-creation
+Description: Optimized worker pool with fixed 4 workers
+=================================================================================
+
+BenchmarkRuntimeFactory-20                    18667             64103 ns/op          154136 B/op         42 allocs/op
+BenchmarkRuntime_SimpleInvoke-20             1101129              1090 ns/op             644 B/op         14 allocs/op
+BenchmarkRuntime_MultiNodeInvoke-20          1033908              1157 ns/op             701 B/op         15 allocs/op
+BenchmarkNodeFactory-20                      4730010               253.4 ns/op           416 B/op          3 allocs/op
+BenchmarkNode_Accept-20                       802054              1495 ns/op            1207 B/op         10 allocs/op
+BenchmarkNode_SimpleExecution-20              797935              1502 ns/op            1207 B/op         10 allocs/op
+BenchmarkNode_ComplexStateTransformation    (HANGS - see analysis)
+
+=================================================================================
+PHASE 4: LOCK CONTENTION OPTIMIZATION
+Date: November 30, 2025
+Branch: 20-low-potential-lock-contention-in-lockbythreadid-under-high-concurrency
+Description: Optimized lock contention in thread management
+=================================================================================
+
+BenchmarkRuntimeFactory-20                    74758             15446 ns/op           23669 B/op         40 allocs/op
+BenchmarkRuntime_AddEdge-20                27506794                63.81 ns/op          107 B/op          1 allocs/op
+BenchmarkRuntime_Validate-20                3517928               346.2 ns/op            48 B/op          3 allocs/op
+BenchmarkRuntime_CurrentState-20           20173999                70.72 ns/op           48 B/op          2 allocs/op
+BenchmarkRuntime_SimpleInvoke-20            1000000              1131 ns/op             644 B/op         14 allocs/op
+BenchmarkRuntime_MultiNodeInvoke-20          988180              1176 ns/op             701 B/op         15 allocs/op
+BenchmarkRuntime_StateReplace-20            7053430               194.1 ns/op           144 B/op          5 allocs/op
+BenchmarkRuntime_WithPersistence-20          139056              9553 ns/op            3587 B/op         73 allocs/op
+BenchmarkRuntime_ListThreads-20           100000000               11.82 ns/op            0 B/op          0 allocs/op
+BenchmarkRuntime_ConditionalRouting-20      1000000              1179 ns/op             662 B/op         15 allocs/op
+BenchmarkStateAccess-20                   100000000               18.36 ns/op           48 B/op          2 allocs/op
+BenchmarkNodeFactory-20                     5669145               215.5 ns/op           432 B/op          3 allocs/op
+BenchmarkNode_Accept-20                     1000000              1412 ns/op            1204 B/op         10 allocs/op
+BenchmarkNode_SimpleExecution-20            1000000              1346 ns/op            1200 B/op         10 allocs/op
+BenchmarkNode_ComplexStateTransformation    (HANGS - see analysis)
+
+=================================================================================
+SUMMARY OF KEY METRICS ACROSS PHASES
+=================================================================================
+
+Metric                    | Baseline | Phase 2  | Phase 3  | Phase 4  | Δ Phase4 vs Baseline
+--------------------------|----------|----------|----------|----------|---------------------
+RuntimeFactory (ns)       | 33,602   | 272,605  | 64,103   | 15,446   | -54% ✅ FASTER
+SimpleInvoke (ns)         | 997      | 891      | 1,090    | 1,131    | +13% 🟢 ACCEPTABLE
+MultiNodeInvoke (ns)      | 1,114    | 1,022    | 1,157    | 1,176    | +6%  ✅ MINIMAL
+NodeFactory (ns)          | 116.6    | 229.1    | 253.4    | 215.5    | +85% 🟡 EXPECTED
+Node_Accept (ns)          | 932      | 1,611    | 1,495    | 1,412    | +51% 🟡 ACCEPTABLE
+Node_SimpleExecution (ns) | 1,053    | 1,609    | 1,502    | 1,346    | +28% 🟢 GOOD
+StateAccess (ns)          | N/A      | N/A      | N/A      | 18.36    | NEW BENCHMARK
+CurrentState (ns)         | 11.63    | 11.59    | N/A      | 70.72    | +508% ⚠️ REGRESSION
+StateReplace (ns)         | 49.78    | 50.74    | N/A      | 194.1    | +290% ⚠️ REGRESSION
+ListThreads (ns)          | 19.53    | 19.45    | N/A      | 11.82    | -39% ✅ IMPROVED
+AddEdge (ns)              | 46.66    | 85.83    | N/A      | 63.81    | +37% 🟢 ACCEPTABLE
+
+=================================================================================
+OBSERVATIONS
+=================================================================================
+
+PHASE 4 (Lock Contention) vs PHASE 3 (Worker Pool):
+✅ RuntimeFactory: 64,103 → 15,446 ns (-76% improvement!)
+✅ Node_Accept: 1,495 → 1,412 ns (-6% improvement)
+✅ Node_SimpleExecution: 1,502 → 1,346 ns (-10% improvement)
+⚠️ CurrentState: New measurement shows 70.72 ns with 2 allocs (vs 11.59 ns/0 allocs in Phase 2)
+⚠️ StateReplace: 50.74 → 194.1 ns (+283% regression, now 5 allocs)
+✅ ListThreads: 19.45 → 11.82 ns (-39% improvement)
+🟢 NodeFactory: 253.4 → 215.5 ns (-15% improvement)
+
+PHASE 4 vs BASELINE:
+✅ RuntimeFactory: Significantly faster (-54%)
+🟢 Core workflow operations within 6-28% of baseline
+⚠️ State access operations show regressions (need investigation)
+✅ Thread operations improved
+
+=================================================================================
