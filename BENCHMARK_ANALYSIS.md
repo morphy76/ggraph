@@ -1,230 +1,181 @@
 # ggraph Benchmark Analysis
 
-**Analysis Date:** November 29, 2025  
+**Analysis Date:** November 30, 2025  
 **Platform:** Linux amd64, Intel Core i9-10900K @ 3.70GHz  
 **Go Version:** 1.25.2  
-**Branch:** 10-critical-unbounded-goroutine-creation-in-node-execution-causes-resource-exhaustion
+**Branch:** 20-low-potential-lock-contention-in-lockbythreadid-under-high-concurrency
 
 ---
 
-## Performance Comparison: Before vs. After Node Worker Pool
+## Performance Evolution: Baseline → Worker Pool → Lock Contention Optimization
 
-This document compares benchmark results **before** and **after** implementing the node worker pool to address Issue #10 (unbounded goroutine creation).
+This document tracks benchmark results across multiple optimization phases:
 
-**Baseline:** Original benchmarks from `review_bench` branch (pre-worker-pool)  
-**Current:** Benchmarks after worker pool implementation
+**Baseline (Phase 1):** Original benchmarks from `review_bench` branch (pre-worker-pool)  
+**Phase 2:** Worker pool implementation (200 workers - Issue #10)  
+**Phase 3:** Worker pool optimization (4 workers)  
+**Phase 4 (Current):** Lock contention optimization (Issue #20)
 
 ## Executive Summary
 
-### Impact of Node Worker Pool Implementation
+### Latest Optimization: Lock Contention (Issue #20) - Phase 4
 
 **Key Changes:**
-- ✅ **Controlled concurrency** - Worker pool limits goroutine creation
-- ✅ **Optimized defaults** - Reduced from 200 to **4 workers** (fixed optimal count)
-- ✅ **Excellent latency** - Node operations 42-61% slower, still sub-1.5µs response time
-- ✅ **Maintained zero-allocation hot paths** - State operations unchanged
-- ✅ **Prevented resource exhaustion** - No more unbounded goroutine creation
-- ✅ **RuntimeFactory optimized** - **77% faster** after Phase 3 tuning (272µs → 64µs)
-- ❌ **Benchmark still hangs** - BenchmarkNode_ComplexStateTransformation remains problematic
+- 🚀 **RuntimeFactory OPTIMIZED** - **76% faster** than Phase 3 (64,103ns → 15,446ns), **54% faster than baseline**
+- ✅ **Lock-free thread operations** - ListThreads 39% faster (19.45ns → 11.82ns)
+- ✅ **Node execution improved** - Accept 6% faster, SimpleExecution 10% faster vs Phase 3
+- ⚠️ **State access regressions** - CurrentState 6x slower (11.59ns → 70.72ns), StateReplace 4x slower (50.74ns → 194.1ns)
+- 🟢 **Workflow throughput maintained** - SimpleInvoke/MultiNodeInvoke within 6% of Phase 3
+
+### Complete Optimization Journey (All Phases)
+
+**Phase 1 (Baseline):** Unbounded goroutines, optimal state operations  
+**Phase 2:** Worker pool (200 workers) - Fixed unbounded goroutines, but 711% slower RuntimeFactory  
+**Phase 3:** Optimized to 4 workers - 77% faster RuntimeFactory, good balance  
+**Phase 4 (Current):** Lock contention fixes - **Best RuntimeFactory performance**, but state operation trade-offs
 
 **Overall Assessment:**  
-The worker pool successfully addresses unbounded goroutine creation (Issue #10) with an **excellent performance trade-off**. Initial regression in RuntimeFactory (711% slower) was resolved through **three optimization phases**, reducing worker count from 200 → 40 → **4 workers**. Final results show RuntimeFactory only **91% slower than baseline** (vs 711% initially) and node execution latency increased by 42-61% (~400-500ns overhead) for predictable resource usage and system stability.
+The lock contention optimization (Phase 4) delivers **excellent improvements** to runtime creation and node execution, achieving the **fastest RuntimeFactory** across all phases (even 54% faster than baseline). However, state access operations (CurrentState, StateReplace) show significant regressions requiring investigation. The system successfully maintains bounded concurrency with improved thread management and excellent workflow throughput.
 
 ## Benchmark Results
 
-### Runtime Operations (Comparison)
+### Runtime Operations (4-Phase Comparison)
 
-| Benchmark | Baseline ns/op | Before Opt | After Opt | Δ Baseline | Δ Optimized | Notes |
-|-----------|----------------|------------|-----------|------------|-------------|-------|
-| **RuntimeFactory** | 33,602 | 272,605 | **64,103** | +91% ✅ | **-77% ✅** | **OPTIMIZED: 4 workers (Phase 3)** |
-| **AddEdge** | 46.66 | 85.83 | - | +84% 🟡 | - | Moderate slowdown |
-| **Validate** | 349.1 | 342.7 | - | -2% ✅ | - | Unchanged |
-| **CurrentState** | 11.63 | 11.59 | - | 0% ✅ | - | ⭐ **ZERO-ALLOC** - Perfect |
-| **SimpleInvoke** | 997.3 | 891.3 | **1,090** | +9% ✅ | **+22%** | Excellent performance |
-| **MultiNodeInvoke** | 1,114 | 1,022 | **1,157** | +4% ✅ | **+13%** | Excellent performance |
-| **StateReplace** | 49.78 | 50.74 | - | +2% ✅ | - | ⭐ **ZERO-ALLOC** - Unchanged |
-| **WithPersistence** | 7,097 | 7,513 | - | +6% ✅ | - | Acceptable variation |
-| **ListThreads** | 19.53 | 19.45 | - | 0% ✅ | - | ⭐ **ZERO-ALLOC** - Perfect |
-| **ConditionalRouting** | 1,010 | 1,023 | - | +1% ✅ | - | Unchanged |
+| Benchmark | Baseline | Phase 2 | Phase 3 | Phase 4 | Δ vs Baseline | Δ vs Phase 3 | Notes |
+|-----------|----------|---------|---------|---------|---------------|--------------|-------|
+| **RuntimeFactory** | 33,602 | 272,605 | 64,103 | **15,446** | **-54% ✅** | **-76% ✅** | ⭐ **FASTEST EVER** |
+| **AddEdge** | 46.66 | 85.83 | - | **63.81** | +37% 🟢 | - | Improved from Phase 2 |
+| **Validate** | 349.1 | 342.7 | - | **346.2** | -1% ✅ | - | Unchanged |
+| **CurrentState** | 11.63 | 11.59 | - | **70.72** | +508% ⚠️ | - | ⚠️ **REGRESSION** - Now 2 allocs |
+| **SimpleInvoke** | 997.3 | 891.3 | 1,090 | **1,131** | +13% 🟢 | +4% ✅ | Excellent |
+| **MultiNodeInvoke** | 1,114 | 1,022 | 1,157 | **1,176** | +6% ✅ | +2% ✅ | Excellent |
+| **StateReplace** | 49.78 | 50.74 | - | **194.1** | +290% ⚠️ | - | ⚠️ **REGRESSION** - Now 5 allocs |
+| **WithPersistence** | 7,097 | 7,513 | - | **9,553** | +35% 🟡 | - | Acceptable |
+| **ListThreads** | 19.53 | 19.45 | - | **11.82** | **-39% ✅** | - | ⭐ **IMPROVED** - Still 0 allocs |
+| **ConditionalRouting** | 1,010 | 1,023 | - | **1,179** | +17% 🟢 | - | Good |
+| **StateAccess** | N/A | N/A | N/A | **18.36** | NEW | NEW | New benchmark |
 
-### Node Operations (Comparison)
+### Node Operations (4-Phase Comparison)
 
-| Benchmark | Baseline ns/op | Before Opt | After Opt | Δ Baseline | Δ Optimized | Notes |
-|-----------|----------------|------------|-----------|------------|-------------|-------|
-| **NodeFactory** | 116.6 | 229.1 | **253.4** | +117% 🟡 | **+11%** | Worker pool initialization overhead |
-| **Node_Accept** | 932.1 | 1,611 | **1,495** | +61% 🟡 | **-7% ✅** | **Phase 3: 4 workers optimal** |
-| **Node_SimpleExecution** | 1,053 | 1,609 | **1,502** | +43% 🟡 | **-7% ✅** | **Phase 3: 4 workers optimal** |
-| **Node_ComplexStateTransformation** | ❌ HANGS | ❌ HANGS | ❌ HANGS | - | - | ⚠️ **STILL HANGS** - Unrelated to worker pool |
+| Benchmark | Baseline | Phase 2 | Phase 3 | Phase 4 | Δ vs Baseline | Δ vs Phase 3 | Notes |
+|-----------|----------|---------|---------|---------|---------------|--------------|-------|
+| **NodeFactory** | 116.6 | 229.1 | 253.4 | **215.5** | +85% 🟡 | **-15% ✅** | Improved from Phase 3 |
+| **Node_Accept** | 932.1 | 1,611 | 1,495 | **1,412** | +51% 🟡 | **-6% ✅** | **Improving trend** |
+| **Node_SimpleExecution** | 1,053 | 1,609 | 1,502 | **1,346** | +28% 🟢 | **-10% ✅** | **Good improvement** |
+| **Node_ComplexStateTransformation** | ❌ HANGS | ❌ HANGS | ❌ HANGS | ❌ HANGS | - | - | ⚠️ **STILL HANGS** |
 
 ## Performance Highlights
 
-### 🌟 Exceptional Performance (Unchanged by Worker Pool)
+### 🌟 Exceptional Improvements (Phase 4 vs Phase 3)
 
-1. **CurrentState (11.59 ns/op, 0 allocs)** ✅ **NO REGRESSION**
-   - 98 million operations per second
-   - Zero allocations - optimal memory efficiency
-   - Lock-free read path
-   - Worker pool has no impact on state reads
+1. **RuntimeFactory (15,446 ns/op, 23,669 B, 40 allocs)** ⭐ **MASSIVE IMPROVEMENT**
+   - **76% faster** than Phase 3 (64,103 → 15,446 ns)
+   - **54% faster** than baseline (33,602 → 15,446 ns)
+   - **94% faster** than Phase 2 initial (272,605 → 15,446 ns)
+   - Best RuntimeFactory performance across all phases
+   - 85% reduction in memory allocation (154KB → 24KB)
 
-2. **ListThreads (19.45 ns/op, 0 allocs)** ✅ **NO REGRESSION**
-   - 60 million operations per second
-   - Zero allocations
-   - Efficient thread enumeration
-   - Unaffected by worker pool implementation
+2. **ListThreads (11.82 ns/op, 0 allocs)** ✅ **EXCELLENT**
+   - **39% faster** than baseline (19.53 → 11.82 ns)
+   - **39% faster** than Phase 2 (19.45 → 11.82 ns)
+   - Zero allocations maintained
+   - Lock-free optimization success
 
-3. **StateReplace (50.74 ns/op, 0 allocs)** ✅ **NO REGRESSION**
-   - 22 million operations per second
-   - Zero allocations
-   - Optimal reducer performance
-   - Worker pool does not impact state updates
+3. **Node_Accept (1,412 ns/op, 1,204 B, 10 allocs)** ✅ **IMPROVING**
+   - **6% faster** than Phase 3 (1,495 → 1,412 ns)
+   - Better than Phase 2 (1,611 ns)
+   - Still 51% slower than baseline, but within acceptable range
+   - Sub-1.5µs latency maintained
 
-### ✅ Strong Performance (Minor Changes)
+4. **Node_SimpleExecution (1,346 ns/op, 1,200 B, 10 allocs)** ✅ **GOOD IMPROVEMENT**
+   - **10% faster** than Phase 3 (1,502 → 1,346 ns)
+   - **16% faster** than Phase 2 (1,609 → 1,346 ns)
+   - Only 28% slower than baseline
+   - Excellent performance for production workflows
 
-4. **SimpleInvoke (891.3 ns/op, 488 B, 9 allocs)** ✅ **11% FASTER**
-   - ~1.1 million operations per second
-   - Actually improved with worker pool
-   - Sub-millisecond latency maintained
-   - Suitable for production workflows
+### ✅ Strong Performance (Maintained)
 
-5. **MultiNodeInvoke (1,022 ns/op, 519 B, 9 allocs)** ✅ **8% FASTER**
-   - ~1 million operations per second
-   - Slight improvement over baseline
-   - Worker pool improves scheduling efficiency
+5. **SimpleInvoke (1,131 ns/op, 644 B, 14 allocs)** ✅ **EXCELLENT**
+   - ~884K operations per second
+   - Only 13% slower than baseline
+   - 4% slower than Phase 3 (minor variation)
+   - Sub-1.2µs latency for production workflows
 
-### 🟡 Acceptable Trade-offs (Worker Pool Impact)
+6. **MultiNodeInvoke (1,176 ns/op, 701 B, 15 allocs)** ✅ **EXCELLENT**
+   - ~850K operations per second
+   - Only 6% slower than baseline
+   - 2% slower than Phase 3 (minor variation)
+   - Excellent multi-node coordination
 
-6. **Node_Accept (1,611 ns/op, 1,207 B, 10 allocs)** 🟡 **73% SLOWER**
-   - ~620K operations per second (was 1.2M)
-   - Worker scheduling overhead visible
-   - **Trade-off:** Bounded resources for predictable performance
-   - Still sub-2ms latency - acceptable for most use cases
+### ⚠️ Performance Regressions (Require Investigation)
 
-7. **NodeFactory (229.1 ns/op, 416 B, 3 allocs)** 🟡 **96% SLOWER**
-   - ~4.4M operations per second (was 9.4M)
-   - Worker pool initialization adds overhead
-   - One-time cost per node creation
-   - Acceptable for infrequent node creation
+7. **CurrentState (70.72 ns/op, 48 B, 2 allocs)** ⚠️ **SIGNIFICANT REGRESSION**
+   - **6x slower** than baseline (11.63 → 70.72 ns)
+   - **6x slower** than Phase 2 (11.59 → 70.72 ns)
+   - Was zero-alloc in Phase 2, now 2 allocs
+   - Changed from lock-free to allocation-based
+   - **Priority:** HIGH - Investigate state access changes
+
+8. **StateReplace (194.1 ns/op, 144 B, 5 allocs)** ⚠️ **SIGNIFICANT REGRESSION**
+   - **4x slower** than baseline (49.78 → 194.1 ns)
+   - **4x slower** than Phase 2 (50.74 → 194.1 ns)
+   - Was zero-alloc in Phase 2, now 5 allocs
+   - **Priority:** HIGH - Investigate reducer changes
+
+9. **WithPersistence (9,553 ns/op, 3,587 B, 73 allocs)** 🟡 **MODERATE REGRESSION**
+   - 35% slower than baseline
+   - 27% slower than Phase 2
+   - 92% more allocations than Phase 2 (38 → 73)
+   - **Priority:** MEDIUM - Review persistence path
 
 ## Performance Concerns
 
-### 🔴 Critical Regression - ✅ RESOLVED
+### 🔴 Critical Issues
 
-#### 1. RuntimeFactory Performance - **OPTIMIZED**
+#### 1. State Access Regressions (NEW - Phase 4)
 
-**Original Issue:**
+**CurrentState Performance:**
 ```
-Baseline:  33,602 ns/op (150,722 B, 28 allocs)
-Unoptimized: 272,605 ns/op (272,150 B, 631 allocs) [+711% slower]
-```
-
-**After Phase 2 Optimization (40 workers):**
-```
-Phase 2: 97,553 ns/op (176,208 B, 151 allocs) [+190% vs baseline, -64% vs unoptimized]
+Baseline:  11.63 ns/op (0 B, 0 allocs)
+Phase 2:   11.59 ns/op (0 B, 0 allocs)
+Phase 4:   70.72 ns/op (48 B, 2 allocs) [+508% slower, +2 allocs]
 ```
 
-**After Phase 3 Optimization (4 workers - FINAL):**
+**StateReplace Performance:**
 ```
-Phase 3: 64,103 ns/op (154,136 B, 42 allocs) [+91% vs baseline, -77% vs unoptimized]
-```
-
-**Root Cause:** Worker pool initially created **200 workers** per runtime (20 CPUs × 10 multiplier)
-- Each worker = 1 goroutine + allocations (~3 allocs per worker)
-- Total: 200 goroutines + 100-size buffered channel per runtime
-- Allocation breakdown: ~3 allocs × 200 workers = 600 allocs
-
-**Solution Phase 2:** Changed default core multiplier from 10 to 2
-```go
-// File: internal/graph/node_worker.go (Phase 2)
-if useCoreMultiplier <= 0 {
-    useCoreMultiplier = 2  // Changed from 10
-}
+Baseline:  49.78 ns/op (0 B, 0 allocs)
+Phase 2:   50.74 ns/op (0 B, 0 allocs)
+Phase 4:   194.1 ns/op (144 B, 5 allocs) [+290% slower, +5 allocs]
 ```
 
-**Phase 2 Results:**
-- ✅ Workers: 200 → 40 (80% reduction)
-- ✅ RuntimeFactory: 272µs → 97µs (64% faster)
-- ✅ Allocations: 631 → 151 (76% reduction)
-- ✅ Memory: 272KB → 176KB (35% reduction)
+**Root Cause Analysis Required:**
+- Lost zero-allocation optimization
+- Introduced 48-144 bytes of allocations
+- 4-6x performance degradation
+- Likely related to lock contention changes in Issue #20
 
-**Solution Phase 3 (FINAL):** Changed to fixed 4 workers
-```go
-// File: internal/graph/node_worker.go (Phase 3 - Current)
-if useWorkers <= 0 {
-    useWorkers = 4  // Fixed optimal count
-}
-```
+**Impact Assessment:**
+- CurrentState: Called frequently for state monitoring (hot path)
+- StateReplace: Used by reducers for state updates (hot path)
+- Both operations now have allocation overhead
+- May impact high-frequency state access patterns
 
-**Phase 3 Results (FINAL):**
-- ✅ Workers: 40 → 4 (90% reduction from Phase 2, 98% from original)
-- ✅ RuntimeFactory: 97µs → 64µs (34% faster, 77% faster than unoptimized)
-- ✅ Allocations: 151 → 42 (72% reduction, 93% from original)
-- ✅ Memory: 176KB → 154KB (13% reduction, 43% from original)
-- ✅ Node execution: Maintained excellent sub-1.5µs latency
+**Recommendations:**
+1. **Review lock contention changes** - Compare state access implementation between Phase 2 and Phase 4
+2. **Profile allocation sources** - Identify what's causing the 2-5 allocations
+3. **Consider sync.Pool** - For reducing allocation overhead
+4. **Benchmark different approaches** - Lock-free vs RWMutex vs atomic operations
+5. **Add regression tests** - Ensure zero-alloc paths remain zero-alloc
 
-**Tuning Validation:**
-
-Comprehensive benchmarks tested configurations across three optimization phases:
-
-| Config | Workers | RuntimeFactory (ns) | Node Execution (ns) | Verdict |
-|--------|---------|---------------------|---------------------|---------|
-| **Fixed 4 (Phase 3)** | **4** | **64,103** | **1,495** | ✅ **OPTIMAL - DEPLOYED** |
-| 10x (old) | 200 | 216,749 | 82,157 | ❌ Excessive overhead |
-| 5x | 100 | 150,097 | 81,766 | ⚠️ Still too many |
-| **2x (new)** | **40** | **83,934** | **81,766** | ✅ **OPTIMAL** |
-| 1x | 20 | 48,129 | 83,301 | ⚠️ May bottleneck |
-| Fixed 16 | 16 | 51,125 | 82,375 | ✅ Good alternative |
-| Fixed 8 | 8 | 52,103 | 82,264 | ⚠️ May bottleneck |
-
-**Key Finding:** All configurations from 4-200 workers show **similar node execution performance** (1.3-1.6µs), proving that **4 workers provides optimal balance** between initialization overhead and execution throughput. Further reduction below 4 workers showed no additional benefit.
-
-**Impact:**
-- Runtime creation is not on hot path (one-time operation)
-- 64µs is excellent for initialization (only 91% slower than 33µs baseline)
-- 4 workers provide optimal concurrency without excessive overhead
-- Node execution remains sub-1.5µs with predictable resource usage
-- **Phase 3 optimization achieved near-baseline performance**
-- **Configuration is production-ready and optimal**
-
-**Priority:** ✅ **RESOLVED** - Phase 3 optimal configuration deployed
+**Priority:** ⚠️ **CRITICAL** - State operations are hot paths, allocations add GC pressure
 
 ---
 
-### ⚠️ Areas for Improvement
+#### 2. Critical: Benchmark Hangs (Unchanged - All Phases)
 
-#### 2. Persistence Overhead (Still Significant)
+**Issue:** `BenchmarkNode_ComplexStateTransformation` **still hangs** across all optimization phases
 
-**Baseline:**
-```
-SimpleInvoke:      997.3 ns/op (490 B,  9 allocs)
-WithPersistence: 7,097 ns/op (2,551 B, 38 allocs)
-```
-
-**Current:**
-```
-SimpleInvoke:      891.3 ns/op (488 B,  9 allocs)
-WithPersistence: 7,513 ns/op (2,520 B, 38 allocs)
-```
-
-**Analysis:**
-- Still **8.4x slower** with persistence enabled (slightly worse)
-- 5.2x more memory allocated
-- 4.2x more allocations
-- Worker pool did not impact persistence overhead
-- Bottleneck: Serialization and channel operations
-
-**Recommendations:**
-1. **Batch persistence** - Accumulate multiple state changes before persisting
-2. **Async persistence** - Already async, but queue may be blocking
-3. **Consider binary encoding** - JSON serialization likely expensive
-4. **Profile persistence path** - Identify specific bottleneck (marshaling vs I/O)
-
-**Priority:** MEDIUM - Only affects stateful workflows
-
-#### 4. Critical: Benchmark Hangs (Unchanged)
-
-**Issue:** `BenchmarkNode_ComplexStateTransformation` **still hangs** after worker pool implementation
-
-**Key Finding:** Hang is **not caused by worker pool** - exists in both baseline and current
+**Key Finding:** Hang is **not caused by worker pool or lock optimization** - exists across all phases
 
 **Investigation needed:**
 ```go
@@ -259,105 +210,73 @@ func BenchmarkNode_ComplexStateTransformation(b *testing.B) {
 
 **Priority:** HIGH - Blocking CI/CD pipeline
 
-#### 2. Node Worker Pool Performance Impact - ✅ FULLY OPTIMIZED
+---
 
-**Before Optimization:**
-```
-Node_Accept:         932.1 ns/op → 1,611 ns/op (+73%)
-Node_SimpleExecution: 1,053 ns/op → 1,609 ns/op (+53%)
-NodeFactory:          116.6 ns/op →  229.1 ns/op (+96%)
-```
+### 🟡 Areas for Improvement
 
-**After Phase 2 Optimization (40 workers):**
-```
-Node_Accept:         932.1 ns/op → 1,358 ns/op (+46%)  [16% faster than before]
-Node_SimpleExecution: 1,053 ns/op → 1,352 ns/op (+28%)  [16% faster than before]
-NodeFactory:          116.6 ns/op → (estimated ~180 ns) [21% faster than before]
-```
+#### 3. Persistence Overhead (Regression in Phase 4)
 
-**After Phase 3 Optimization (4 workers - FINAL):**
+**Historical Performance:**
 ```
-Node_Accept:         932.1 ns/op → 1,495 ns/op (+61%)  [7% faster than Phase 2]
-Node_SimpleExecution: 1,053 ns/op → 1,502 ns/op (+43%)  [7% faster than Phase 2]
-NodeFactory:          116.6 ns/op →   253.4 ns/op (+117%) [41% faster than Phase 2]
+Baseline:  7,097 ns/op (2,551 B, 38 allocs)
+Phase 2:   7,513 ns/op (2,520 B, 38 allocs)
+Phase 4:   9,553 ns/op (3,587 B, 73 allocs) [+35% vs baseline, +92% more allocs]
 ```
 
 **Analysis:**
-- Worker pool now adds **~450-500ns latency** to node execution (optimal balance)
-- Overhead from:
-  - Work queue channel operations
-  - Worker selection/scheduling (minimal with 4 workers)
-  - Context switching between goroutines
-- Memory allocations unchanged (+1 allocation for Accept)
-
-**Trade-off Assessment:**
-```
-Before Worker Pool: Unbounded goroutines, potential OOM, unpredictable performance
-After (200 workers): Bounded, stable, but +680ns latency, excessive init overhead
-After (40 workers):  Bounded, stable, +400ns latency, reduced init overhead
-After (4 workers):   Bounded, stable, +500ns latency, OPTIMAL init overhead
-
-Conclusion: OPTIMAL CONFIGURATION ACHIEVED
-```
-
-**Performance Summary:**
-- ✅ Node execution: 1.4-1.5µs total (excellent for production use cases)
-- ✅ RuntimeFactory: 64µs (only 91% slower than baseline)
-- ✅ Predictable resource consumption (4 workers per runtime)
-- ✅ No throughput loss under load
-- ✅ Minimal initialization overhead (42 allocs vs 631 originally)
-
-**Priority:** ✅ **FULLY OPTIMIZED** - Phase 3 configuration is production-optimal
-
-#### 3. Persistence Overhead (Still Significant)
-
-**Observation:**
-```
-Validate: 349.1 ns/op (48 B, 3 allocs)
-```
-
-**Analysis:**
-- Called once per runtime creation (acceptable)
-- If called frequently during execution, could be optimized
-- Current implementation likely does graph traversal
+- **27% slower** than Phase 2
+- **92% more allocations** (38 → 73)
+- **42% more memory** (2,520B → 3,587B)
+- Bottleneck: Serialization and channel operations
+- Regression likely related to state access changes
 
 **Recommendations:**
-1. **Cache validation results** - Mark graphs as validated
-2. **Incremental validation** - Only validate new edges
-3. **Lazy validation** - Only validate on first invoke
+1. **Investigate allocation sources** - Profile persistence path in Phase 4
+2. **Batch persistence** - Accumulate multiple state changes before persisting
+3. **Consider binary encoding** - JSON serialization likely expensive
+4. **Review state access pattern** - May be affected by CurrentState/StateReplace changes
 
-**Priority:** LOW - Not on hot path
+**Priority:** MEDIUM - Only affects stateful workflows, but regression is significant
 
 ## Scalability Analysis
 
 ### Concurrent Performance
 
-Based on benchmark names and results:
+Based on benchmark results across phases:
 
-1. **Thread-safe state access** - Zero-alloc reads indicate lock-free or efficient locking
-2. **Per-thread isolation** - Good throughput suggests minimal contention
-3. **Goroutine per node** - Node_Accept creates goroutines (overhead in allocation count)
+1. **Thread-safe state access** - Lock-based in Phase 4 (previously lock-free)
+2. **Per-thread isolation** - Good throughput maintained
+3. **Worker pool per runtime** - 4 workers provide optimal concurrency
+4. **Lock contention optimization** - ListThreads 39% faster
 
 ### Memory Efficiency
 
-**Good:**
-- Zero-alloc hot paths (CurrentState, ListThreads, StateReplace)
-- Low allocation count for most operations (1-9 allocs)
-- Small allocation sizes (48-1,204 bytes)
+**Phase 4 Analysis:**
 
-**Areas to monitor:**
-- Persistence path allocates more (38 allocs)
-- RuntimeFactory allocates 150KB (acceptable for one-time operation)
-- Node operations allocate ~1.2KB each (includes goroutine overhead)
+**Excellent:**
+- ListThreads (0 allocs) - Still zero-alloc after optimization
+- RuntimeFactory memory reduced 85% (154KB → 24KB)
 
-### Throughput Characteristics
+**Concerning:**
+- CurrentState: 0 → 2 allocs (48B)
+- StateReplace: 0 → 5 allocs (144B)
+- WithPersistence: 38 → 73 allocs (92% increase)
 
-| Operation Class | Throughput | Suitable For |
-|----------------|------------|--------------|
-| State reads | 20-95M ops/sec | High-frequency monitoring |
-| Graph modification | 3-29M ops/sec | Dynamic graph updates |
-| Workflow execution | 1M ops/sec | Production agent systems |
-| Persistent workflows | 155K ops/sec | Stateful long-running agents |
+**Overall:**
+- Runtime operations: 14-15 allocs (was 9 in Phase 2)
+- Node operations: 10 allocs (unchanged)
+- Persistence path: 73 allocs (was 38)
+
+### Throughput Characteristics (Phase 4)
+
+| Operation Class | Throughput | Change vs Baseline | Suitable For |
+|----------------|------------|-------------------|--------------|
+| Thread operations | 85M ops/sec | +337% ✅ | High-frequency thread lookups |
+| State reads | 14M ops/sec | -84% ⚠️ | Frequent state monitoring |
+| Graph modification | 16M ops/sec | +37% ✅ | Dynamic graph updates |
+| Workflow execution | 850K-880K ops/sec | +6-13% 🟢 | Production agent systems |
+| Persistent workflows | 105K ops/sec | -32% 🟡 | Stateful long-running agents |
+| Runtime creation | 65K ops/sec | +356% ✅ | Dynamic runtime allocation |
 
 ## Comparison with Similar Systems
 
@@ -383,44 +302,57 @@ Based on benchmark names and results:
 
 ## Optimization Opportunities
 
-### High-Impact (Recommended)
+### 🔴 High-Impact (Recommended)
 
-1. **Fix hanging benchmark** (CRITICAL)
+1. **Fix state access regressions** (CRITICAL - NEW in Phase 4)
+   - Investigate CurrentState allocation sources (0 → 2 allocs)
+   - Investigate StateReplace allocation sources (0 → 5 allocs)
+   - Profile lock contention changes from Issue #20
+   - Consider reverting to lock-free reads if possible
+   - Add benchmark guards to prevent future regressions
+   - **Impact:** Restore hot path zero-alloc performance
+
+2. **Fix hanging benchmark** (CRITICAL)
    - Blocks development workflow
    - May indicate production issue
    - Investigate deadlock/goroutine leak
+   - **Impact:** Unblock CI/CD pipeline
 
-2. **Optimize persistence path** (HIGH VALUE)
+3. **Optimize persistence path** (HIGH VALUE - Regression in Phase 4)
+   - Investigate 92% allocation increase (38 → 73 allocs)
+   - Profile state access impact on persistence
    - Consider protocol buffers or msgpack instead of JSON
    - Batch persistence writes
    - Use buffer pools to reduce allocations
-   - Profile to identify exact bottleneck
+   - **Impact:** Restore Phase 2 persistence performance
 
-3. **Add worker pool for node execution** (MEDIUM VALUE)
-   - Currently: Unbounded goroutine creation
-   - Proposed: Fixed-size worker pool
-   - Benefits: Predictable memory, better backpressure
-   - Trade-off: Slightly higher latency under low load
+### 🟡 Medium-Impact
 
-### Medium-Impact
+4. **Profile CurrentState and StateReplace**
+   - Identify exact allocation sources
+   - Compare implementation between Phase 2 and Phase 4
+   - Consider using sync.Pool for temporary allocations
+   - **Impact:** Reduce hot path allocations
 
-4. **Cache validation results**
+5. **Cache validation results**
    - Mark graphs as validated after first check
    - Avoid repeated traversals
    - Low effort, moderate benefit
+   - **Impact:** Reduce validation overhead
 
-5. **Optimize edge lookups**
+### 🟢 Low-Impact
+
+6. **Optimize edge lookups**
    - Profile to see if map lookups are bottleneck
    - Consider alternative data structures for hot paths
    - May not be necessary given current performance
+   - **Impact:** Marginal throughput improvement
 
-### Low-Impact
-
-6. **Reduce allocations in invoke path**
-   - Currently 9 allocations per invoke
+7. **Reduce allocations in invoke path**
+   - Currently 14-15 allocations per invoke (up from 9)
    - Analyze allocation sources with `-benchmem` and profiling
    - Use sync.Pool for reusable objects
-   - Diminishing returns given current performance
+   - **Impact:** Diminishing returns given current performance
 
 ## Testing Recommendations
 
@@ -432,17 +364,21 @@ Based on benchmark names and results:
    go test -bench=. -benchmem | benchstat base.txt new.txt
    ```
 
-2. **Create performance budget**
+2. **Create performance budget (Phase 4 Updated)**
    ```
-   CurrentState:    < 20 ns/op, 0 allocs
-   SimpleInvoke:    < 1,500 ns/op, < 15 allocs
+   RuntimeFactory:  < 20,000 ns/op, < 50,000 B, < 50 allocs
+   CurrentState:    < 15 ns/op, 0 allocs  # Target: restore zero-alloc
+   StateReplace:    < 60 ns/op, 0 allocs  # Target: restore zero-alloc
+   SimpleInvoke:    < 1,500 ns/op, < 20 allocs
    WithPersistence: < 10,000 ns/op, < 50 allocs
+   ListThreads:     < 15 ns/op, 0 allocs  # Maintained ✅
    ```
 
 3. **Add stress tests**
    - 1000 concurrent threads
    - 10,000 node executions
    - Memory leak detection
+   - Lock contention analysis
 
 ### Additional Benchmarks Needed
 
@@ -467,127 +403,153 @@ Based on benchmark names and results:
 
 ## Recommendations Summary
 
-### Immediate Actions (This Week)
+### 🚨 Immediate Actions (This Week)
 
-1. ❗ **Fix hanging benchmark** - Investigate `BenchmarkNode_ComplexStateTransformation`
-2. 📊 **Add benchmark to CI** - Prevent performance regressions
-3. 🔍 **Profile persistence path** - Identify serialization bottleneck
+1. ❗ **Investigate state access regressions** - CurrentState and StateReplace lost zero-alloc (Issue #20 related)
+2. ❗ **Fix hanging benchmark** - Investigate `BenchmarkNode_ComplexStateTransformation`
+3. 📊 **Add benchmark to CI** - Prevent performance regressions
+4. 🔍 **Profile allocation sources** - Identify what's causing new allocations in Phase 4
 
-### Short-term (This Month)
+### 📅 Short-term (This Month)
 
-4. 🚀 **Optimize persistence** - Use binary encoding, batching
-5. 👷 **Add worker pool** - Limit concurrent goroutines (Issue #10 tracks this)
-6. 📈 **Add stress tests** - Validate concurrent performance
+5. 🚀 **Optimize persistence** - Reduce from 73 to 38 allocs, restore Phase 2 performance
+6. 🔄 **Review lock contention changes** - Compare Phase 2 vs Phase 4 implementations
+7. 📈 **Add stress tests** - Validate concurrent performance under load
+8. 🎯 **Document Phase 4 changes** - Capture lock optimization trade-offs
 
-### Long-term (This Quarter)
+### 📆 Long-term (This Quarter)
 
-7. 💡 **Performance monitoring** - Add metrics/observability (Issue #22, #36)
-8. 🔧 **Cache validation** - Optimize graph validation
-9. 📚 **Document performance** - Best practices guide
+9. 💡 **Performance monitoring** - Add metrics/observability (Issue #22, #36)
+10. 🔧 **Cache validation** - Optimize graph validation
+11. 📚 **Document performance** - Best practices guide
+12. 🔬 **Investigate zero-alloc restoration** - Research lock-free alternatives
 
 ## Conclusion
 
-**Overall Assessment: EXCELLENT with Successful Worker Pool Integration** ⭐⭐⭐⭐⭐
+**Overall Assessment: EXCELLENT with Trade-offs in Phase 4** ⭐⭐⭐⭐
 
-ggraph demonstrates outstanding performance for a graph-based workflow runtime, and the worker pool implementation successfully addresses unbounded goroutine creation:
+ggraph demonstrates strong performance evolution through four optimization phases:
 
-### ✅ Worker Pool Implementation Success
+### ✅ Phase 4 Achievements (Lock Contention Optimization)
 
-**Achieved Goals (Issue #10):**
-- ✅ **Bounded goroutine creation** - No more resource exhaustion
-- ✅ **Predictable resource usage** - Fixed worker pool size (4 workers)
-- ✅ **Excellent performance trade-off** - 43-61% node latency increase for stability
-- ✅ **No impact on hot paths** - State operations remain zero-alloc and fast
-- ✅ **Near-baseline RuntimeFactory** - Only 91% slower vs 711% initially
+**Major Wins:**
+- ✅ **RuntimeFactory: 76% faster** than Phase 3, **54% faster than baseline** (15,446 ns)
+- ✅ **ListThreads: 39% faster** than baseline with zero-alloc maintained
+- ✅ **Node execution improved** - Accept 6% faster, SimpleExecution 10% faster
+- ✅ **Memory reduction** - RuntimeFactory uses 85% less memory (154KB → 24KB)
+- ✅ **Workflow throughput** - SimpleInvoke/MultiNodeInvoke within 6-13% of baseline
 
-**Performance Impact Summary:**
+**Trade-offs:**
+- ⚠️ **CurrentState 6x slower** - Lost zero-alloc (11.59ns → 70.72ns, 0 → 2 allocs)
+- ⚠️ **StateReplace 4x slower** - Lost zero-alloc (50.74ns → 194.1ns, 0 → 5 allocs)
+- ⚠️ **Persistence 35% slower** - More allocations (38 → 73 allocs)
+
+### 📊 Complete Journey Summary
+
 ```
-🟢 Unaffected (0-13% change):  State reads, invoke operations, validation
-🟢 Optimized overhead (43-61%): Node operations (worker scheduling, Phase 3)
-🟢 Excellent (91% vs baseline): RuntimeFactory (4 workers, down from 711% with 200)
+Phase 1 (Baseline):    Unbounded goroutines, optimal state ops
+Phase 2 (200 workers): Bounded concurrency, 711% slower RuntimeFactory
+Phase 3 (4 workers):   Optimized balance, 91% slower RuntimeFactory
+Phase 4 (Lock opt):    Best RuntimeFactory, state access trade-offs
 ```
 
-### ✅ Maintained Strengths
+**Performance Evolution:**
+```
+RuntimeFactory:  33,602ns → 272,605ns → 64,103ns → 15,446ns ✅ BEST
+CurrentState:    11.63ns  → 11.59ns    → N/A     → 70.72ns  ⚠️ REGRESSION
+Node_Accept:     932ns    → 1,611ns    → 1,495ns → 1,412ns  ✅ IMPROVING
+SimpleInvoke:    997ns    → 891ns      → 1,090ns → 1,131ns  ✅ EXCELLENT
+```
 
-- Zero-allocation hot paths (CurrentState, ListThreads, StateReplace)
-- Sub-microsecond state operations (11-20ns)
-- Million ops/sec throughput for core operations
-- Efficient memory usage
-- Production-ready performance
+### 🎯 Verdict by Phase
 
-### ⚠️ Remaining Areas for Improvement
+**Phase 1-3 Journey: EXCEPTIONAL SUCCESS** ⭐⭐⭐⭐⭐
+- Successfully addressed unbounded goroutine creation
+- Optimized worker pool to 4 workers (optimal balance)
+- Maintained zero-alloc hot paths
+- Near-baseline performance with bounded resources
 
-1. **Fix hanging benchmark** (CRITICAL) - Unrelated to worker pool
-2. ~~**Optimize worker pool defaults**~~ ✅ **COMPLETED** - Reduced core multiplier from 10 to 2
-3. **Optimize persistence** (MEDIUM) - Still 8x slower than non-persistent
-4. **Further tune worker pool** (LOW) - Consider lazy initialization for even better startup
+**Phase 4 (Current): MIXED RESULTS** ⭐⭐⭐⭐
+- **Outstanding:** RuntimeFactory, thread operations, node execution
+- **Concerning:** State access operations lost zero-alloc optimization
+- **Investigation Required:** Lock contention changes introduced allocations
 
-### 🎯 Verdict
+### 🚀 Production Readiness
 
-**Worker Pool Implementation: EXCEPTIONAL SUCCESS** ⭐⭐⭐⭐⭐
+**Strengths:**
+- Best-in-class RuntimeFactory performance (15.4µs)
+- Sub-1.5µs node execution latency
+- 850K+ ops/sec workflow throughput
+- Bounded concurrency with predictable resource usage
+- Excellent thread operation performance
 
-The performance trade-off is **outstanding** after Phase 3 optimization:
-- Node execution latency increased by ~450-500ns (1.4-1.5µs total)
-- Still maintaining sub-1.5µs response times
-- Eliminated unbounded goroutine creation risk
-- Predictable resource consumption under load (4 workers per runtime)
-- RuntimeFactory near-baseline performance (64µs vs 33µs baseline, only 91% slower)
+**Attention Required:**
+- Restore zero-alloc state access (hot paths)
+- Reduce persistence allocations back to Phase 2 levels
+- Fix hanging benchmark
+- Profile and optimize allocation sources in Phase 4
 
-**After Phase 3 Optimization (FINAL):**
-- ✅ 4 workers provides optimal balance (vs 200 originally)
-- ✅ 77% faster RuntimeFactory than unoptimized (272µs → 64µs)
-- ✅ 7% faster node execution than Phase 2 (1,358ns → 1,495ns)
-- ✅ 93% fewer allocations than original (631 → 42)
-- ✅ Only 91% slower than baseline (vs 711% initially)
-
-**Production Readiness:** The system is **production-optimal** for high-throughput agent systems with controlled concurrency. The worker pool successfully prevents resource exhaustion while achieving near-baseline performance characteristics. The **fixed 4-worker configuration** provides the optimal balance between initialization overhead and execution throughput.
+**Recommendation:** Phase 4 is **production-ready** for most workloads, but teams with high-frequency state access should profile carefully and consider the state access trade-offs. The lock contention optimization delivers significant benefits to runtime creation and thread operations, making it suitable for dynamic runtime allocation patterns.
 
 ---
 
-## Worker Pool Implementation Notes
+## Phase 4 Implementation Notes
 
 ### What Changed
 
-**Branch:** `10-critical-unbounded-goroutine-creation-in-node-execution-causes-resource-exhaustion`
+**Branch:** `20-low-potential-lock-contention-in-lockbythreadid-under-high-concurrency`
 
 **Key Changes:**
-1. Implemented fixed-size worker pool for node execution
-2. Workers process node tasks from a queue instead of spawning goroutines
-3. Worker pool initialized during runtime factory creation
-4. Queue-based work distribution replaces direct goroutine spawns
+1. Optimized lock contention in thread management (Issue #20)
+2. Improved ListThreads performance (39% faster)
+3. Dramatically improved RuntimeFactory (76% faster than Phase 3)
+4. Reduced memory allocation in runtime creation (85% reduction)
 
-**Architecture:**
+**Architecture Impact:**
 ```
-Before: Node.Accept() → spawn goroutine → execute
-After:  Node.Accept() → enqueue work → worker picks up → execute
+Phase 3: Lock-based with potential contention
+Phase 4: Optimized locking strategy → thread ops faster, state ops slower
 ```
 
 ### Performance Analysis Methodology
 
-**Baseline Data:** Extracted from original BENCHMARK_ANALYSIS.md (review_bench branch)
-**Current Data:** Fresh benchmark run on worker pool branch
-**Comparison:** Side-by-side percentage changes with color coding
+**Historical Data:** Tracked across 4 phases in benchmark_history.txt
+**Current Data:** Fresh benchmark run on lock contention optimization branch
+**Comparison:** Multi-phase analysis with percentage changes
 
 **Change Assessment:**
-- 🟢 **0-15% change:** Acceptable variation / improvement
-- 🟡 **15-100% change:** Expected overhead from worker pool
-- 🔴 **>100% change:** Significant regression requiring attention
+- 🟢 **Improvements:** RuntimeFactory, ListThreads, Node operations
+- 🟡 **Acceptable:** Workflow operations (SimpleInvoke, MultiNodeInvoke)
+- 🔴 **Regressions:** State access operations (CurrentState, StateReplace, Persistence)
 
 ### Raw Benchmark Data
 
-Baseline results are preserved in this document.  
-Current results saved to: `bench_results.txt`
+All historical results preserved in: `benchmark_history.txt`
+Current results saved to: `benchmark_results_20251130_015355.txt`
 
 ---
 
-## Worker Pool Optimization Recommendations
+## Worker Pool Optimization History (Phases 1-3) - ✅ COMPLETED
 
-### Current Configuration Issues
+### Overview
 
-**Problem:** Default worker pool configuration is overly aggressive
-- **Current:** 200 workers per runtime (20 CPUs × 10 multiplier)
-- **Overhead:** ~3 allocs per worker + goroutine stack (2-8KB each)
-- **Impact:** 711% slower RuntimeFactory, 600+ allocations
+Worker pool optimization was completed in Phase 3, addressing Issue #10 (unbounded goroutine creation). Phase 4 maintains the 4-worker configuration while optimizing lock contention.
+
+### Current Configuration (Phase 3 → Phase 4 Maintained)
+
+**Implementation:**
+```go
+// File: internal/graph/node_worker.go
+if useWorkers <= 0 {
+    useWorkers = 4  // Fixed optimal count
+}
+```
+
+**Results Maintained in Phase 4:**
+- ✅ 4 workers per runtime
+- ✅ Bounded goroutine creation
+- ✅ Predictable resource usage
+- ✅ Optimal execution throughput
 
 ### Optimization History
 
@@ -616,9 +578,9 @@ if useCoreMultiplier <= 0 {
 - Workers: 200 → 40 (80% reduction)
 - RuntimeFactory: 272µs → 97µs (64% faster)
 - Allocations: 631 → 151 (76% reduction)
-- Verdict: Good improvement, but can do better
+- Verdict: Good improvement
 
-#### Phase 3: Fixed Optimal Count (4 workers) ⭐ DEPLOYED
+#### Phase 3: Fixed Optimal Count (4 workers) ⭐ COMPLETED
 
 **Change:**
 ```go
@@ -629,194 +591,99 @@ if useWorkers <= 0 {
 
 **Results:**
 - Workers: 40 → 4 (90% reduction from Phase 2)
-- RuntimeFactory: 97µs → 64µs (34% faster, 77% faster than original)
-- Allocations: 151 → 42 (72% reduction, 93% from original)
+- RuntimeFactory: 97µs → 64µs (34% faster)
+- Allocations: 151 → 42 (72% reduction)
 - Node execution: 1.4-1.5µs (excellent performance)
 - Verdict: **OPTIMAL - Production deployed**
 
-**Justification:**
-- 4 workers provides optimal throughput for typical workloads
-- Minimal initialization overhead
-- Node execution is fast (~1.5µs), workers efficiently utilized
-- Maintains all bounded concurrency benefits
-- Testing showed diminishing returns below 4 workers
+#### Phase 4: Lock Contention Optimization (4 workers maintained) ⭐ CURRENT
 
-**Risk:** NONE - Extensively benchmarked and validated
-
----
-
-#### 2. Lazy Worker Initialization (Future Enhancement)
-
-**Change:**
-```go
-// Create workers on first Submit(), not in newWorkerPool()
-func (wp *workerPool) Submit(task func()) {
-    wp.initOnce.Do(func() {
-        wp.start()
-    })
-    wp.taskQueue <- task
-}
-```
-
-**Impact:**
-- RuntimeFactory: ~272µs → ~35µs (87% faster)
-- Zero overhead for runtimes that never execute nodes
-- First Submit() pays one-time initialization cost
-
-**Justification:**
-- Many runtimes created for validation/testing only
-- Benchmarks create/destroy runtimes frequently
-- Production runtimes amortize cost over many invocations
-
-**Risk:** MEDIUM - Adds complexity, first execution latency
+**Key Results:**
+- RuntimeFactory: 64µs → **15µs** (76% faster!)
+- Workers: **4 maintained** (optimal)
+- Allocations: 42 → **40** (slightly improved)
+- Memory: 154KB → **24KB** (85% reduction!)
+- Verdict: **Best RuntimeFactory performance ever**
 
 ---
 
-#### 3. Configurable Defaults via Environment Variables (Enhancement)
+## Lock Contention Optimization (Phase 4) - Issue #20
 
-**Change:**
-```go
-// Allow runtime tuning without code changes
-func getDefaultWorkerCount() int {
-    if env := os.Getenv("GGRAPH_WORKER_COUNT"); env != "" {
-        if count, err := strconv.Atoi(env); err == nil && count > 0 {
-            return count
-        }
-    }
-    return runtime.NumCPU() * 2  // Default multiplier of 2
-}
-```
+### Implementation Details
 
-**Impact:**
-- Users can tune for their workload
-- Easy A/B testing of different configurations
-- No code changes required
+**Branch:** `20-low-potential-lock-contention-in-lockbythreadid-under-high-concurrency`
 
-**Risk:** LOW - Optional feature with sensible defaults
+**Objective:** Reduce lock contention in thread management under high concurrency
 
----
+**Changes Made:**
+- Optimized locking strategy in `lockByThreadID` operations
+- Improved thread lookup performance
+- Reduced contention in concurrent thread operations
 
-### Benchmark-Specific Optimization
+### Performance Impact Analysis
 
-For benchmarks that create/destroy many runtimes:
+**Major Improvements:**
+1. **RuntimeFactory:** 64,103ns → 15,446ns (-76% ✅)
+2. **ListThreads:** 19.45ns → 11.82ns (-39% ✅)
+3. **Node_Accept:** 1,495ns → 1,412ns (-6% ✅)
+4. **Node_SimpleExecution:** 1,502ns → 1,346ns (-10% ✅)
+5. **NodeFactory:** 253.4ns → 215.5ns (-15% ✅)
 
-```go
-// Use explicit worker pool configuration
-runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[T]{
-    InitialState: initialState,
-    WorkerCount: 4,              // Explicit count
-    WorkerQueueSize: 10,         // Smaller queue
-    WorkerCountCoreMultiplier: 1, // Disable multiplier
-})
-```
+**Regressions Identified:**
+1. **CurrentState:** 11.59ns → 70.72ns (+6x ⚠️, 0→2 allocs)
+2. **StateReplace:** 50.74ns → 194.1ns (+4x ⚠️, 0→5 allocs)
+3. **WithPersistence:** 7,513ns → 9,553ns (+27% ⚠️, 38→73 allocs)
 
-**Impact on Benchmarks:**
-- RuntimeFactory: 272µs → ~35µs (87% faster)
-- More representative of production usage
-- Tests worker pool behavior with realistic counts
+### Root Cause Analysis (Preliminary)
 
----
+**Hypothesis:**
+- Lock contention optimization may have changed state access patterns
+- Trade-off between thread operation performance and state operation performance
+- Possible introduction of defensive copies or additional synchronization
 
-### Implementation Status
+**Evidence:**
+- Thread operations improved significantly (ListThreads -39%)
+- State operations lost zero-alloc optimization
+- Allocation count increased across state operations
 
-| Optimization | Status | Result | Impact Achieved |
-|--------------|--------|--------|----------------|
-| Phase 1: Initial (200 workers) | ❌ Replaced | Too slow | 711% slower |
-| Phase 2: Multiplier 10→2 (40 workers) | ✅ Completed | Improved | 64% faster |
-| Phase 3: Fixed 4 workers | ⭐ **DEPLOYED** | **Optimal** | **77% faster (vs Phase 1)** |
-| Lazy initialization | ⏸️ Deferred | Not needed | Phase 3 sufficient |
-| Env var config | 📋 Future | Enhancement | User flexibility |
+**Next Steps:**
+1. Compare state access implementation between Phase 2 and Phase 4
+2. Profile allocation sources in CurrentState and StateReplace
+3. Evaluate if lock-free state reads can be restored
+4. Consider using sync.Pool for temporary allocations
 
-### Completed Optimization Journey
+### Trade-off Assessment
 
-**✅ Phase 1 (Initial):**
-1. ❌ Implemented worker pool with 200 workers
-2. ❌ Discovered 711% RuntimeFactory regression
-3. ✅ Identified root cause: excessive worker count
+**Gains:**
+- ✅ 76% faster runtime creation
+- ✅ 39% faster thread operations
+- ✅ 6-15% faster node operations
+- ✅ 85% less memory in RuntimeFactory
 
-**✅ Phase 2 (First Optimization):**
-1. ✅ Reduced multiplier from 10 to 2 (40 workers)
-2. ✅ Achieved 64% speedup (272µs → 97µs)
-3. ✅ Validated with comprehensive benchmarks
+**Costs:**
+- ⚠️ 6x slower state reads (hot path)
+- ⚠️ 4x slower state updates (hot path)
+- ⚠️ 92% more allocations in persistence
 
-**✅ Phase 3 (Final Optimization) - CURRENT:**
-1. ✅ Changed to fixed 4 workers
-2. ✅ Achieved 77% total speedup (272µs → 64µs)
-3. ✅ Production deployed and validated
-4. ✅ Documentation updated
-
-**📋 Future Enhancements (Optional):**
-1. Environment variable configuration for custom tuning
-2. Lazy worker initialization (if needed)
-3. Per-workload worker pool sizing (advanced use cases)
-
-**Validation Results:**
-```bash
-# Phase 1 (200 workers)
-go test -bench=BenchmarkRuntimeFactory -benchmem ./internal/graph
-# Result: 272,605 ns/op, 631 allocs ❌
-
-# Phase 2 (40 workers)
-go test -bench=BenchmarkRuntimeFactory -benchmem ./internal/graph
-# Result: 97,553 ns/op, 151 allocs ✅
-
-# Phase 3 (4 workers) - CURRENT
-go test -bench=BenchmarkRuntimeFactory -benchmem ./internal/graph
-# Result: 64,103 ns/op, 42 allocs ⭐ OPTIMAL
-
-# Baseline (no worker pool)
-# Reference: 33,602 ns/op, 28 allocs
-```
-
----
-
-## Appendix: Alternative Approaches Evaluated
-
-### Queue-Based Worker Sizing (Rejected)
-
-**Approach:** Set workers = 3/4 × queueSize (e.g., 75 workers for queue=100)
-
-**Results:**
-- RuntimeFactory: 141,160 ns/op (320% slower than baseline)
-- Race conditions in high concurrency tests (panic: send on closed channel)
-- 28% more memory, 510% more allocations vs fixed 4 workers
-
-**Why it failed:**
-- Queue size (buffering capacity) ≠ Optimal worker count (execution parallelism)
-- 75 workers created excessive coordination overhead
-- No throughput improvement over 4 workers
-- Conceptual mismatch between queue depth and concurrency needs
-
-**Verdict:** Fixed worker count is superior - independent of unrelated configuration
-
-### Comprehensive Queue Ratio Testing
-
-Tested configurations from 4 to 150 workers with various queue sizes:
-
-| Workers | Queue | RuntimeFactory (ns) | Verdict |
-|---------|-------|---------------------|---------|
-| 4 | 20 | 39,248 | ✅ Best |
-| 4 | 100 | 42,289 | ✅ Optimal |
-| 10 | 100 | 42,408 | ✅ Good |
-| 15 | 20 | 36,968 | ✅ Good |
-| 25 | 100 | 53,315 | 🟡 Acceptable |
-| 37 | 50 | 106,281 | ❌ Poor |
-| 75 | 100 | 141,160 | ❌ Poor (queue ratio) |
-| 150 | 200 | 136,012 | ❌ Poor |
-
-**Key Finding:** Performance degrades significantly beyond 15 workers, with no throughput benefit.
+**Recommendation:**
+- Phase 4 is production-ready for runtime-heavy workloads
+- Teams with high-frequency state access should benchmark carefully
+- Investigation needed to restore zero-alloc state operations
 
 ---
 
 ## Benchmark Reproduction
 
-### Current Configuration (Phase 3)
+### Current Configuration (Phase 4)
 ```bash
 # Run key benchmarks
 go test -bench="BenchmarkRuntimeFactory|BenchmarkRuntime_SimpleInvoke|BenchmarkRuntime_MultiNodeInvoke|BenchmarkNode_Accept|BenchmarkNode_SimpleExecution|BenchmarkNodeFactory" -benchmem -run=^$ ./internal/graph
 
 # Full benchmark suite
-go test -bench=. -benchmem -run=^$ ./internal/graph
+make test-bench
+
+# Or manually
+go test -bench=. -benchmem -timeout=60s -run=^$ ./internal/graph ./pkg/...
 ```
 
 ### With Profiling
@@ -832,34 +699,33 @@ go tool pprof mem.prof
 # Allocation tracing
 go test -bench=BenchmarkRuntimeFactory -benchmem -trace=trace.out ./internal/graph
 go tool trace trace.out
+
+# State operation profiling (investigate regressions)
+go test -bench="BenchmarkRuntime_CurrentState|BenchmarkRuntime_StateReplace" -benchmem -memprofile=state_mem.prof ./internal/graph
+go tool pprof -alloc_space state_mem.prof
 ```
 
 ### Historical Configurations
+
+All historical benchmark data is preserved in `benchmark_history.txt` for comparison across phases.
+
 ```bash
-# Phase 1 (200 workers) - for comparison only
-# Modify node_worker.go: useWorkers = runtime.NumCPU() * 10
-go test -bench=BenchmarkRuntimeFactory -benchmem ./internal/graph
-# Expected: ~272µs, 631 allocs
+# View historical comparisons
+cat benchmark_history.txt
 
-# Phase 2 (40 workers) - for comparison only
-# Modify node_worker.go: useWorkers = runtime.NumCPU() * 2
-go test -bench=BenchmarkRuntimeFactory -benchmem ./internal/graph
-# Expected: ~97µs, 151 allocs
-
-# Phase 3 (4 workers) - CURRENT
-# Current configuration: useWorkers = 4 (fixed)
-go test -bench=BenchmarkRuntimeFactory -benchmem ./internal/graph
-# Expected: ~64µs, 42 allocs
+# Compare specific benchmarks across phases
+grep "BenchmarkRuntimeFactory" benchmark_history.txt
+grep "BenchmarkRuntime_CurrentState" benchmark_history.txt
 ```
 
 ## Related Issues
 
-- #10: Unbounded goroutine creation in node execution
+- #10: Unbounded goroutine creation in node execution (✅ RESOLVED - Phase 3)
 - #16: Unbounded memory growth from thread maps
-- #20: Potential lock contention in lockByThreadID
+- #20: Potential lock contention in lockByThreadID (✅ ADDRESSED - Phase 4, trade-offs identified)
 - #22: Add comprehensive observability (metrics, logging, tracing)
 - #36: Add observability hooks for monitoring and tracing
 
 ---
 
-*This analysis is based on benchmarks run on November 29, 2025. Performance characteristics may vary based on hardware, workload, and future optimizations.*
+*This analysis tracks performance evolution across 4 optimization phases (November 29-30, 2025). Performance characteristics may vary based on hardware, workload, and future optimizations.*
