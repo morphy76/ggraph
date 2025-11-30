@@ -370,8 +370,8 @@ func BenchmarkRuntime_ListThreads(b *testing.B) {
 		}
 	}()
 	runtime, _ := RuntimeFactory(startEdge, stateMonitorCh, &g.RuntimeOptions[RuntimeTestState]{})
-	defer close(stateMonitorCh)
 	defer runtime.Shutdown()
+	defer close(stateMonitorCh)
 
 	// Create multiple threads
 	for i := 0; i < 100; i++ {

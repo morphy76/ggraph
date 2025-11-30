@@ -376,6 +376,13 @@ func (r *runtimeImpl[T]) sendMonitorEntry(entry g.StateMonitorEntry[T]) {
 		return
 	}
 
+	// Protect against panic if channel is closed during send
+	defer func() {
+		if rec := recover(); rec != nil {
+			// Channel was closed, silently ignore
+		}
+	}()
+
 	select {
 	case r.stateMonitorCh <- entry:
 	case <-time.After(r.settings.OutcomeNotificationMaxInterval):
