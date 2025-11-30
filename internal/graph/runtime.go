@@ -59,7 +59,7 @@ func RuntimeFactory[T g.SharedState](
 
 		initialState:    opts.InitialState,
 		state:           make(map[string]T),
-		stateChangeLock: make(map[string]*sync.RWMutex),
+		stateChangeLock: sync.Map{}, // map[string]*sync.RWMutex
 
 		executing: make(map[string]*atomic.Bool),
 
@@ -119,7 +119,7 @@ type runtimeImpl[T g.SharedState] struct {
 
 	initialState    T
 	state           map[string]T
-	stateChangeLock map[string]*sync.RWMutex
+	stateChangeLock sync.Map // map[string]*sync.RWMutex
 
 	executing map[string]*atomic.Bool
 
@@ -561,14 +561,8 @@ func (r *runtimeImpl[T]) executingByThreadID(config g.InvokeConfig) *atomic.Bool
 }
 
 func (r *runtimeImpl[T]) lockByThreadID(threadID string) *sync.RWMutex {
-	r.runtimeLock.Lock()
-	lock, exists := r.stateChangeLock[threadID]
-	if !exists {
-		lock = &sync.RWMutex{}
-		r.stateChangeLock[threadID] = lock
-	}
-	r.runtimeLock.Unlock()
-	return lock
+	val, _ := r.stateChangeLock.LoadOrStore(threadID, &sync.RWMutex{})
+	return val.(*sync.RWMutex)
 }
 
 func (r *runtimeImpl[T]) threadExistsWithinTTL(threadID string) bool {
@@ -587,5 +581,5 @@ func (r *runtimeImpl[T]) clearThread(threadID string) {
 	delete(r.state, threadID)
 	delete(r.executing, threadID)
 	delete(r.lastPersisted, threadID)
-	delete(r.stateChangeLock, threadID)
+	r.stateChangeLock.Delete(threadID)
 }
