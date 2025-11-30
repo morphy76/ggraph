@@ -64,6 +64,8 @@ type ModelOptions struct {
 	User *string
 	// Tools available to the agent during the conversation.
 	Tools []*tool.Tool
+	// SummarizationConfig holds the configuration for conversation summarization
+	SummarizationConfig *SummarizationConfig
 }
 
 // ModelOption defines an interface for applying options to completion requests.
@@ -365,6 +367,29 @@ func WithMaxCompletionTokens(maxCompletionTokens int64) ModelOption {
 func WithTools(tools ...*tool.Tool) ModelOption {
 	return ModelOptionFunc(func(r *ModelOptions) error {
 		r.Tools = tools
+		return nil
+	})
+}
+
+// WithSummarization sets the SummarizationConfig option for conversation requests.
+//
+// Parameters:
+//   - config: A pointer to the SummarizationConfig instance.
+//
+// Returns:
+//   - A ConversationOption that sets the SummarizationConfig parameter.
+//
+// Example usage:
+//
+//	summarizationConfig := &SummarizationConfig{
+//	    Enabled:          true,
+//	    MessageThreshold: 15,
+//	    KeepRecentCount:  5,
+//	}
+//	option := WithSummarization(summarizationConfig)
+func WithSummarization(config *SummarizationConfig) ModelOption {
+	return ModelOptionFunc(func(r *ModelOptions) error {
+		r.SummarizationConfig = config
 		return nil
 	})
 }

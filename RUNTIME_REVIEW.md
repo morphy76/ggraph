@@ -1,6 +1,7 @@
 # Graph Runtime Code Review - UPDATED
 
 **Date:** November 29, 2025  
+**Last Updated:** November 30, 2025  
 **Reviewer:** GitHub Copilot  
 **File:** `/internal/graph/runtime.go`  
 **Focus Areas:** Best Go practices, Runtime issues/leaks, Gaps vs LangGraph
@@ -13,12 +14,12 @@
 
 The runtime implementation is **exceptionally well-engineered** with comprehensive production features including robust multi-threaded conversation capabilities and **context cancellation support**. All critical requirements are met:
 
-- ✅ **State equality comparison** uses `reflect.DeepEqual` (line 469)
-- ✅ **Persistence error handling** has timeout and error reporting (lines 232-250)
-- ✅ **CurrentState() interface** properly exposed in StateObserver (pkg/graph/graph.go)
+- ✅ **State equality comparison** uses `reflect.DeepEqual` (line 522)
+- ✅ **Persistence error handling** has timeout and error reporting (lines 247-270)
+- ✅ **CurrentState() interface** properly exposed in StateObserver (pkg/graph/graph.go:163-184)
 - ✅ **Multi-threaded conversation support** fully implemented with thread-safe state isolation
-- ✅ **Context cancellation support** via InvokeConfig.Context (lines 265-273, pkg/graph/runtime.go:94)
-- ✅ **Thread lifecycle management** with automatic cleanup via clearThread() (lines 503-513)
+- ✅ **Context cancellation support** via InvokeConfig.Context (pkg/graph/runtime.go, internal/graph/runtime.go:285-295)
+- ✅ **Thread lifecycle management** with automatic cleanup via clearThread() (line 547)
 
 The code demonstrates **exemplary Go practices** with:
 - Generic type constraints with full type safety
@@ -176,7 +177,7 @@ Great news! All three original critical issues have been fixed:
 
 #### 1. ✅ **FIXED**: State Equality Check Now Uses reflect.DeepEqual
 
-**Location:** `statesEqual()` method (line 394)
+**Location:** `statesEqual()` method (line 522)
 
 ```go
 func (r *runtimeImpl[T]) statesEqual(a, b T) bool {
@@ -190,25 +191,25 @@ func (r *runtimeImpl[T]) statesEqual(a, b T) bool {
 
 **Current Implementation:** Now correctly uses `reflect.DeepEqual()` for reliable structural equality comparison.
 
-**Verification:** ✅ Confirmed in `/home/rp/workspace/go/ggraph/internal/graph/runtime.go:394`
+**Verification:** ✅ Confirmed in `/home/rp/workspace/go/ggraph/internal/graph/runtime.go:522`
 
 ---
 
 #### 2. ✅ **FIXED**: Persistence Now Has Timeout and Error Reporting
 
-**Location:** `persistState()` method (lines 176-207)
+**Location:** `persistState()` method (lines 247-270)
 
 ```go
-ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+ctx, cancel := context.WithTimeout(context.Background(), r.settings.PersistenceJobTimeout)
 defer cancel()
 
 select {
-case r.pendingPersist <- currentState:
+case r.pendingPersist <- pendingPersistEntry[T]{threadID: threadID, state: currentState.(T)}:
 case <-ctx.Done():
-    r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", 
+    r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", threadID,
         fmt.Errorf("persistence timed out: %w", ctx.Err())))
 default:
-    r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", 
+    r.sendMonitorEntry(monitorNonFatalError[T]("Persistence", threadID,
         fmt.Errorf("cannot persist state: %w", g.ErrPersistenceQueueFull)))
 }
 ```
@@ -218,26 +219,29 @@ default:
 **Previous Issue:** Silent data loss when channel was full - no error reporting or backpressure.
 
 **Current Implementation:** 
-- ✅ Uses 5-second timeout for queue insertion
+- ✅ Uses configurable timeout for queue insertion (default 5 seconds, via `r.settings.PersistenceJobTimeout`)
 - ✅ Reports errors through monitoring channel on timeout
 - ✅ Reports when queue is full (default case)
 - ✅ Uses sentinel error `ErrPersistenceQueueFull`
 - ✅ Prevents indefinite blocking
 
-**Verification:** ✅ Confirmed in `/home/rp/workspace/go/ggraph/internal/graph/runtime.go:176-207`
+**Verification:** ✅ Confirmed in `/home/rp/workspace/go/ggraph/internal/graph/runtime.go:247-270`
 
 ---
 
 #### 3. ✅ **FIXED**: CurrentState() Now in Public StateObserver Interface
 
-**Location:** `pkg/graph/graph.go` (lines 165-178)
+**Location:** `pkg/graph/graph.go` (lines 163-184)
 
 ```go
 type StateObserver[T SharedState] interface {
-    NotifyStateChange(node Node[T], userInput, stateChange T, reducer ReducerFn[T], err error, partial bool)
+    NotifyStateChange(node Node[T], config InvokeConfig, userInput, stateChange T, reducer ReducerFn[T], err error, partial bool)
     
-    // CurrentState returns the current state of the graph execution.
-    CurrentState() T
+    // CurrentState returns the current state for the given thread ID.
+    CurrentState(threadID string) T
+    
+    // InitialState returns the initial state used at the start of execution.
+    InitialState() T
 }
 ```
 
@@ -246,12 +250,12 @@ type StateObserver[T SharedState] interface {
 **Previous Issue:** `CurrentState()` was called by nodes but not part of the interface contract, creating hidden coupling.
 
 **Current Implementation:**
-- ✅ `CurrentState()` is now part of the `StateObserver` interface
-- ✅ Node implementation can safely call `runtime.CurrentState()` (line 66)
+- ✅ `CurrentState(threadID string)` is now part of the `StateObserver` interface with proper thread ID parameter
+- ✅ Node implementation can safely call `stateObserver.CurrentState(useThreadID)` (line 88 in node.go)
 - ✅ Interface contract is clear and complete
 - ✅ No hidden dependencies on internal implementation
 
-**Verification:** ✅ Confirmed in `/home/rp/workspace/go/ggraph/pkg/graph/graph.go:165-178` and usage in `/home/rp/workspace/go/ggraph/internal/graph/node.go:66,73`
+**Verification:** ✅ Confirmed in `/home/rp/workspace/go/ggraph/pkg/graph/graph.go:163-184` and usage in `/home/rp/workspace/go/ggraph/internal/graph/node.go:88`
 
 ---
 
@@ -329,7 +333,7 @@ runtime, err := builders.CreateRuntime(
 
 **Location:** `InvokeConfig` struct (pkg/graph/runtime.go line 94) and usage in `onNodeOutcome()` (lines 265-273)
 
-**Current Implementation:**
+**Current Implementation:**\
 ```go
 // In pkg/graph/runtime.go
 type InvokeConfig struct {

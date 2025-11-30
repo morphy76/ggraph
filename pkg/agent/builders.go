@@ -46,6 +46,9 @@ func CreateCompletionOptions(
 			return &ModelOptions{}, err
 		}
 	}
+	useOptions.SummarizationConfig = &SummarizationConfig{
+		Enabled: false,
+	}
 	return &useOptions, nil
 }
 
@@ -122,5 +125,6 @@ func CreateConversationOptions(
 			return &ModelOptions{}, err
 		}
 	}
+	useOptions.SummarizationConfig = FillSummarizationConfigWithDefaults(useOptions.SummarizationConfig)
 	return &useOptions, nil
 }
