@@ -1,14 +1,11 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
 	"time"
-
-	"github.com/openai/openai-go/v3"
 
 	a "github.com/morphy76/ggraph/pkg/agent"
 	aiw "github.com/morphy76/ggraph/pkg/agent/aiw"
@@ -41,126 +38,6 @@ type ThreadResult struct {
 	Error      error
 	StartTime  time.Time
 	EndTime    time.Time
-}
-
-// TeacherNodeFn creates a conversational node for a high school teacher generating questions
-var TeacherNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, model string, conversationOptions ...a.ModelOption) g.NodeFn[a.Conversation] {
-	return func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) (a.Conversation, error) {
-		// System instruction for the teacher
-		systemMsg := a.CreateMessage(a.System, "Sei un insegnante di scuola superiore. "+
-			"Genera una domanda casuale su cultura generale, matematica, fisica, letteratura, scienze, storia, in generale su argomenti scolastici ma non di attualità. "+
-			"Fai la domanda, con una brevissima introduzione o spiegazione. Parla solo in italiano.")
-
-		useOpts, err := a.CreateConversationOptions(
-			model,
-			[]a.Message{systemMsg, a.CreateMessage(a.User, "Genera una domanda")},
-			conversationOptions...,
-		)
-		if err != nil {
-			return currentState, fmt.Errorf("failed to create conversation options: %w", err)
-		}
-
-		openAIOpts := o.ConvertConversationOptions(useOpts)
-
-		resp, err := chatService.Completions.New(context.Background(), openAIOpts)
-		if err != nil {
-			return currentState, fmt.Errorf("failed to generate question: %w", err)
-		}
-
-		// Add the teacher's question to the conversation
-		question := resp.Choices[0].Message.Content
-		currentState.Messages = append(currentState.Messages,
-			a.CreateMessage(a.Assistant, question))
-
-		return currentState, nil
-	}
-}
-
-// StudentNodeFn creates a conversational node for a student answering questions
-var StudentNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, model string, conversationOptions ...a.ModelOption) g.NodeFn[a.Conversation] {
-	return func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) (a.Conversation, error) {
-		// Get the last message (the question from the teacher)
-		if len(currentState.Messages) == 0 {
-			return currentState, fmt.Errorf("no question to answer")
-		}
-
-		lastMessage := currentState.Messages[len(currentState.Messages)-1]
-		question := lastMessage.Content
-
-		// System instruction for the student
-		systemMsg := a.CreateMessage(a.System, "Sei uno studente di scuola superiore. "+
-			"Rispondi alla domanda che ti viene posta nel modo più completo e preciso possibile. "+
-			"Parla solo in italiano.")
-
-		useOpts, err := a.CreateConversationOptions(
-			model,
-			[]a.Message{systemMsg, a.CreateMessage(a.User, question)},
-			conversationOptions...,
-		)
-		if err != nil {
-			return currentState, fmt.Errorf("failed to prepare student options: %w", err)
-		}
-
-		openAIOpts := o.ConvertConversationOptions(useOpts)
-
-		resp, err := chatService.Completions.New(context.Background(), openAIOpts)
-		if err != nil {
-			return currentState, fmt.Errorf("failed to generate answer: %w", err)
-		}
-
-		// Add the student's answer to the conversation
-		answer := resp.Choices[0].Message.Content
-		currentState.Messages = append(currentState.Messages,
-			a.CreateMessage(a.User, answer))
-
-		return currentState, nil
-	}
-}
-
-// EvaluatorNodeFn creates a conversational node for an expert linguist evaluating answers
-var EvaluatorNodeFn o.ConversationNodeFn = func(chatService openai.ChatService, model string, conversationOptions ...a.ModelOption) g.NodeFn[a.Conversation] {
-	return func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) (a.Conversation, error) {
-		// Get the question and answer
-		if len(currentState.Messages) < 2 {
-			return currentState, fmt.Errorf("not enough messages to evaluate")
-		}
-
-		question := currentState.Messages[len(currentState.Messages)-2].Content
-		answer := currentState.Messages[len(currentState.Messages)-1].Content
-
-		// System instruction for the evaluator
-		systemMsg := a.CreateMessage(a.System, "Sei un esperto linguista e valutatore di contenuti. "+
-			"Valuta la risposta dello studente in termini di grammatica, correttezza lessicale e correttezza del contenuto rispetto alla domanda posta. "+
-			"Dai un punteggio da 0 a 10 per ogni categoria (10 è il massimo) e un breve commento. "+
-			"Rispondi SOLO con un oggetto JSON nel seguente formato: "+
-			`{"grammatica": {"punteggio": <numero>, "commento": "<testo>"}, "lessico": {"punteggio": <numero>, "commento": "<testo>"}, "contenuto": {"punteggio": <numero>, "commento": "<testo>"}}. `+
-			"Non aggiungere altro testo prima o dopo il JSON. Parla solo in italiano nei commenti.")
-
-		prompt := fmt.Sprintf("Domanda: %s\n\nRisposta: %s\n\nValuta la risposta.", question, answer)
-
-		useOpts, err := a.CreateConversationOptions(
-			model,
-			[]a.Message{systemMsg, a.CreateMessage(a.User, prompt)},
-			conversationOptions...,
-		)
-		if err != nil {
-			return currentState, fmt.Errorf("failed to create conversation options: %w", err)
-		}
-
-		openAIOpts := o.ConvertConversationOptions(useOpts)
-
-		resp, err := chatService.Completions.New(context.Background(), openAIOpts)
-		if err != nil {
-			return currentState, fmt.Errorf("failed to generate evaluation: %w", err)
-		}
-
-		// Add the evaluator's assessment to the conversation
-		evaluation := resp.Choices[0].Message.Content
-		currentState.Messages = append(currentState.Messages,
-			a.CreateMessage(a.Assistant, evaluation))
-
-		return currentState, nil
-	}
 }
 
 // ThreadMonitor tracks state for a single thread
@@ -219,7 +96,7 @@ func runThread(
 	}
 
 	// Run the graph with the pre-assigned threadID
-	userInput := a.CreateConversation()
+	userInput := a.CreateConversation(a.CreateMessage(a.User, "Genera una domanda casuale su cultura generale, matematica, fisica, letteratura, scienze, storia, in generale su argomenti scolastici ma non di attualità."))
 	actualThreadID := graph.Invoke(userInput, g.InvokeConfigThreadID(threadID))
 
 	fmt.Printf("\n✅ [Thread %d] Invoke completato: actualThreadID=%s, expected=%s\n",
@@ -462,31 +339,57 @@ func main() {
 	// Create the three nodes with different Velvet models
 	teacherNode, err := o.CreateConversationNode(
 		"TeacherNode",
-		"velvet-2b-1.5-02-34260",
+		"velvet-2b-1.5-03-23918",
 		aiwClient,
-		TeacherNodeFn,
+		a.WithMessages(
+			a.CreateMessage(a.System, "Sei un insegnante di scuola superiore che sta interrogando uno studente poco preparato. "+
+				"Non dare suggerimenti o risposte alla domanda posta. Fai la domanda, con una brevissima introduzione o spiegazione. "+
+				"Parla solo in italiano."),
+		),
 		a.WithTemperature(1.0),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create teacher node: %v", err)
 	}
+	askNode, err := b.NewNode("Teach2Student", func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) (a.Conversation, error) {
+		return a.CreateConversation(
+			currentState.Messages[len(currentState.Messages)-1],
+		), nil
+	})
 
 	studentNode, err := o.CreateConversationNode(
 		"StudentNode",
 		"velvet-25b-07-15771",
 		aiwClient,
-		StudentNodeFn,
+		a.WithMessages(
+			a.CreateMessage(a.System, "Sei uno studente di scuola superiore. "+
+				"Rispondi alla domanda che ti viene posta nel modo più completo e preciso possibile. "+
+				"Parla solo in italiano."),
+		),
 		a.WithTemperature(0.5),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create student node: %v", err)
 	}
+	answerNode, err := b.NewNode("Student2Eval", func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) (a.Conversation, error) {
+		mexCount := len(currentState.Messages)
+		return a.CreateConversation(
+			a.CreateMessage(a.User, fmt.Sprintf("Question:\n%s\n\nAnswer:\n%s", currentState.Messages[mexCount-2].Content, currentState.Messages[mexCount-1].Content)),
+		), nil
+	})
 
 	evaluatorNode, err := o.CreateConversationNode(
 		"EvaluatorNode",
 		"velvet-14b",
 		aiwClient,
-		EvaluatorNodeFn,
+		a.WithMessages(
+			a.CreateMessage(a.System, "Sei un esperto linguista e valutatore di contenuti. "+
+				"Valuta la risposta dello studente in termini di grammatica, correttezza lessicale e correttezza del contenuto rispetto alla domanda posta. "+
+				"Dai un punteggio da 0 a 10 per ogni categoria (10 è il massimo) e un breve commento. "+
+				"Rispondi SOLO con un oggetto JSON nel seguente formato: "+
+				`{"grammatica": {"punteggio": <numero>, "commento": "<testo>"}, "lessico": {"punteggio": <numero>, "commento": "<testo>"}, "contenuto": {"punteggio": <numero>, "commento": "<testo>"}}. `+
+				"Non aggiungere altro testo prima o dopo il JSON. Parla solo in italiano nei commenti."),
+		),
 		a.WithTemperature(0.0),
 	)
 	if err != nil {
@@ -495,8 +398,10 @@ func main() {
 
 	// Create edges connecting the nodes
 	startEdge := b.CreateStartEdge(teacherNode)
-	teacherToStudentEdge := b.CreateEdge(teacherNode, studentNode)
-	studentToEvaluatorEdge := b.CreateEdge(studentNode, evaluatorNode)
+	teacher2Ask := b.CreateEdge(teacherNode, askNode)
+	ask2StudentEdge := b.CreateEdge(askNode, studentNode)
+	student2Answer := b.CreateEdge(studentNode, answerNode)
+	answer2EvaluatorEdge := b.CreateEdge(answerNode, evaluatorNode)
 	endEdge := b.CreateEndEdge(evaluatorNode)
 
 	// Initialize the conversation state
@@ -511,7 +416,7 @@ func main() {
 	defer graph.Shutdown()
 
 	// Add all edges to the graph
-	graph.AddEdge(teacherToStudentEdge, studentToEvaluatorEdge, endEdge)
+	graph.AddEdge(teacher2Ask, ask2StudentEdge, student2Answer, answer2EvaluatorEdge, endEdge)
 
 	// Validate the graph
 	err = graph.Validate()

@@ -23,7 +23,7 @@ import (
 //	internalOpts := a.CreateCompletionOptions(...)
 //
 //	openAIParams := ConvertCompletionOptions(internalOpts)
-func ConvertCompletionOptions(opts *a.ModelOptions) openai.CompletionNewParams {
+func ConvertCompletionOptions(opts a.ModelOptions) openai.CompletionNewParams {
 	rv := openai.CompletionNewParams{
 		Prompt: openai.CompletionNewParamsPromptUnion{OfString: openai.String(opts.Prompt)},
 		Model:  openai.CompletionNewParamsModel(opts.Model),
@@ -76,7 +76,7 @@ func ConvertCompletionOptions(opts *a.ModelOptions) openai.CompletionNewParams {
 //	internalOpts := a.CreateCompletionOptions(...)
 //
 //	openAIChatParams := ConvertConversationOptions(internalOpts)
-func ConvertConversationOptions(modelOptions *a.ModelOptions) openai.ChatCompletionNewParams {
+func ConvertConversationOptions(modelOptions a.ModelOptions) openai.ChatCompletionNewParams {
 	messages := make([]openai.ChatCompletionMessageParamUnion, len(modelOptions.Messages))
 	for i, msg := range modelOptions.Messages {
 		var union openai.ChatCompletionMessageParamUnion

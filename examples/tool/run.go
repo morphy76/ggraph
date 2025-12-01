@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 
@@ -36,9 +35,17 @@ func main() {
 
 	client := o.NewOpenAIClient(apiKey)
 
-	llmFn := func(chatService openai.ChatService, model string, conversationOptions ...a.ModelOption) g.NodeFn[a.Conversation] {
-		return func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) (a.Conversation, error) {
-			systemMex := `
+	tool1, err := t.CreateTool[int](additionTool, "Prompt: this tool is used to sum two integers.", "Input: addend1, addend2", "Required: addend1, addend2")
+	if err != nil {
+		log.Fatalf("Failed to create addition tool: %v", err)
+	}
+
+	tool2, err := t.CreateTool[int](divisionTool, "Prompt: this tool is used to divide a dividend by a divisor.", "Input: dividend, divisor", "Required: dividend, divisor")
+	if err != nil {
+		log.Fatalf("Failed to create division tool: %v", err)
+	}
+
+	systemMex := `
 			Use all tools: feel free to use the available tools to answer the user's question through multiple tool calls.
 			You must never perform arithmetic or reasoning operations yourself.
 			You must always use the provided tools for every operation.
@@ -56,68 +63,13 @@ func main() {
 				}
 			]`
 
-			useMessages := []a.Message{}
-			if len(currentState.Messages) > 0 {
-				useMessages = currentState.Messages
-			} else {
-				useMessages = append(useMessages, a.CreateMessage(a.System, systemMex))
-				useMessages = append(useMessages, userInput.Messages...)
-			}
-
-			currentState.Messages = useMessages
-
-			useOpts, err := a.CreateConversationOptions(
-				model,
-				useMessages,
-				conversationOptions...,
-			)
-			if err != nil {
-				return currentState, fmt.Errorf("failed to create conversation options: %w", err)
-			}
-
-			openAIOpts := o.ConvertConversationOptions(useOpts)
-
-			resp, err := chatService.Completions.New(context.Background(), openAIOpts)
-			if err != nil {
-				return currentState, fmt.Errorf("failed to generate tool calls: %w", err)
-			}
-
-			answer := resp.Choices[0].Message
-			useAnswer := a.CreateMessage(a.Assistant, answer.Content)
-			requestedToolCalls := resp.Choices[0].Message.ToolCalls
-			if len(requestedToolCalls) > 0 {
-				toolCalls := make([]t.FnCall, 0, len(requestedToolCalls))
-				for _, openAIToolCall := range requestedToolCalls {
-					toolCall, err := o.ConvertToolCall(openAIToolCall)
-					if err != nil {
-						return currentState, fmt.Errorf("failed to convert tool call: %w", err)
-					}
-					toolCalls = append(toolCalls, *toolCall)
-				}
-				useAnswer.ToolCalls = toolCalls
-				currentState.CurrentToolCalls = toolCalls
-			}
-			currentState.Messages = append(currentState.Messages, useAnswer)
-
-			return currentState, nil
-		}
-	}
-
-	tool1, err := t.CreateTool[int](additionTool, "Prompt: this tool is used to sum two integers.", "Input: addend1, addend2", "Required: addend1, addend2")
-	if err != nil {
-		log.Fatalf("Failed to create addition tool: %v", err)
-	}
-
-	tool2, err := t.CreateTool[int](divisionTool, "Prompt: this tool is used to divide a dividend by a divisor.", "Input: dividend, divisor", "Required: dividend, divisor")
-	if err != nil {
-		log.Fatalf("Failed to create division tool: %v", err)
-	}
-
 	llmWithTools, err := o.CreateConversationNode(
 		"AgentWithTools",
 		openai.ChatModelGPT5Nano,
 		client,
-		llmFn,
+		a.WithMessages(
+			a.CreateMessage(a.System, systemMex),
+		),
 		a.WithUser("ggraph"),
 		a.WithTools(tool1, tool2),
 	)

@@ -8,6 +8,8 @@ type ModelOptions struct {
 	Model string
 	// The prompt to generate completions for.
 	Prompt string
+	// The format of the prompt. Default is '%s'.
+	PromptFormat string
 	// The messages that make up the conversation history.
 	Messages []Message
 	// Generates `best_of` completions server-side and returns the "best" (the one with
@@ -64,6 +66,8 @@ type ModelOptions struct {
 	User *string
 	// Tools available to the agent during the conversation.
 	Tools []*tool.Tool
+	// SummarizationConfig holds the configuration for conversation summarization
+	SummarizationConfig *SummarizationConfig
 }
 
 // ModelOption defines an interface for applying options to completion requests.
@@ -106,6 +110,45 @@ func (s ModelOptionFunc) ApplyToCompletion(r *ModelOptions) error { return s(r) 
 // Returns:
 //   - An error if the application of the option fails, otherwise nil.
 func (s ModelOptionFunc) ApplyToConversation(r *ModelOptions) error { return s(r) }
+
+// WithPromptFormat sets the PromptFormat option for completion requests.
+//
+// Parameters:
+//   - format: The format string for the prompt.
+//
+// Returns:
+//   - A CompletionOption that sets the PromptFormat parameter.
+//
+// Example usage:
+//
+//	option := WithPromptFormat("User says: %s")
+func WithPromptFormat(format string) ModelOption {
+	return ModelOptionFunc(func(r *ModelOptions) error {
+		r.PromptFormat = format
+		return nil
+	})
+}
+
+// WithMessages sets the Messages option for conversation requests.
+//
+// Parameters:
+//   - messages: A variadic list of Message instances.
+//
+// Returns:
+//   - A ConversationOption that sets the Messages parameter.
+//
+// Example usage:
+//
+//	option := WithMessages(
+//	    CreateMessage(System, "You are a helpful assistant."),
+//	    CreateMessage(User, "Tell me a joke."),
+//	)
+func WithMessages(messages ...Message) ModelOption {
+	return ModelOptionFunc(func(r *ModelOptions) error {
+		r.Messages = messages
+		return nil
+	})
+}
 
 // WithBestOf sets the BestOf option for completion requests.
 //
@@ -365,6 +408,29 @@ func WithMaxCompletionTokens(maxCompletionTokens int64) ModelOption {
 func WithTools(tools ...*tool.Tool) ModelOption {
 	return ModelOptionFunc(func(r *ModelOptions) error {
 		r.Tools = tools
+		return nil
+	})
+}
+
+// WithSummarization sets the SummarizationConfig option for conversation requests.
+//
+// Parameters:
+//   - config: A pointer to the SummarizationConfig instance.
+//
+// Returns:
+//   - A ConversationOption that sets the SummarizationConfig parameter.
+//
+// Example usage:
+//
+//	summarizationConfig := &SummarizationConfig{
+//	    Enabled:          true,
+//	    MessageThreshold: 15,
+//	    KeepRecentCount:  5,
+//	}
+//	option := WithSummarization(summarizationConfig)
+func WithSummarization(config *SummarizationConfig) ModelOption {
+	return ModelOptionFunc(func(r *ModelOptions) error {
+		r.SummarizationConfig = config
 		return nil
 	})
 }
