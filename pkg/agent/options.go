@@ -8,6 +8,8 @@ type ModelOptions struct {
 	Model string
 	// The prompt to generate completions for.
 	Prompt string
+	// The format of the prompt. Default is '%s'.
+	PromptFormat string
 	// The messages that make up the conversation history.
 	Messages []Message
 	// Generates `best_of` completions server-side and returns the "best" (the one with
@@ -108,6 +110,45 @@ func (s ModelOptionFunc) ApplyToCompletion(r *ModelOptions) error { return s(r) 
 // Returns:
 //   - An error if the application of the option fails, otherwise nil.
 func (s ModelOptionFunc) ApplyToConversation(r *ModelOptions) error { return s(r) }
+
+// WithPromptFormat sets the PromptFormat option for completion requests.
+//
+// Parameters:
+//   - format: The format string for the prompt.
+//
+// Returns:
+//   - A CompletionOption that sets the PromptFormat parameter.
+//
+// Example usage:
+//
+//	option := WithPromptFormat("User says: %s")
+func WithPromptFormat(format string) ModelOption {
+	return ModelOptionFunc(func(r *ModelOptions) error {
+		r.PromptFormat = format
+		return nil
+	})
+}
+
+// WithMessages sets the Messages option for conversation requests.
+//
+// Parameters:
+//   - messages: A variadic list of Message instances.
+//
+// Returns:
+//   - A ConversationOption that sets the Messages parameter.
+//
+// Example usage:
+//
+//	option := WithMessages(
+//	    CreateMessage(System, "You are a helpful assistant."),
+//	    CreateMessage(User, "Tell me a joke."),
+//	)
+func WithMessages(messages ...Message) ModelOption {
+	return ModelOptionFunc(func(r *ModelOptions) error {
+		r.Messages = messages
+		return nil
+	})
+}
 
 // WithBestOf sets the BestOf option for completion requests.
 //

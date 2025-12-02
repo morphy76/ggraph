@@ -63,7 +63,6 @@ func NewOpenAIClient(
 //   - name: The unique name for the node.
 //   - model: The OpenAI model to be used for the chat agent.
 //   - client: The OpenAI client instance.
-//   - completionNodeFn: A function that creates the node function for the OpenAI chat agent.
 //   - completionOptions: Additional completion options for the OpenAI API calls.
 //
 // Returns:
@@ -76,10 +75,49 @@ func NewOpenAIClient(
 func CreateCompletionNode(
 	name, model string,
 	client *openai.Client,
-	completionNodeFn CompletionNodeFn,
 	completionOptions ...a.ModelOption,
 ) (g.Node[a.Completion], error) {
-	openAIFn := completionNodeFn(client.Completions, model, completionOptions...)
+	return CreateCompletionNodeWithFnOverride(
+		name,
+		model,
+		client,
+		completionNodeFn,
+		completionOptions...,
+	)
+}
+
+// CreateCompletionNodeWithFnOverride creates a graph node for an OpenAI-based chat agent
+// with a custom completion function.
+//
+// Parameters:
+//   - name: The unique name for the node.
+//   - model: The OpenAI model to be used for the chat agent.
+//   - client: The OpenAI client instance.
+//   - completionFn: A custom completion node function.
+//   - completionOptions: Additional completion options for the OpenAI API calls.
+//
+// Returns:
+//   - An instance of g.Node[a.Completion] configured for the OpenAI chat agent.
+//   - An error if the node creation fails.
+//
+// Example usage:
+//
+//	node, err := CreateCompletionNodeWithFnOverride("ChatNode",  "your-api-key", "gpt-4", myCustomCompletionFn)
+func CreateCompletionNodeWithFnOverride(
+	name, model string,
+	client *openai.Client,
+	completionFn CompletionNodeFn,
+	completionOptions ...a.ModelOption,
+) (g.Node[a.Completion], error) {
+	useCompletionOptions := &a.ModelOptions{}
+	for _, opt := range completionOptions {
+		if err := opt.ApplyToCompletion(useCompletionOptions); err != nil {
+			return nil, fmt.Errorf("cannot create a completion node: %w", err)
+		}
+	}
+	useCompletionOptions.Model = model
+
+	openAIFn := completionFn(client.Completions, *useCompletionOptions)
 
 	rv, err := b.NewNode(name, openAIFn)
 	return rv, err
@@ -91,7 +129,6 @@ func CreateCompletionNode(
 //   - name: The unique name for the node.
 //   - model: The OpenAI model to be used for the chat agent.
 //   - client: The OpenAI client instance.
-//   - conversationNodeFn: A function that creates the node function for the OpenAI chat agent.
 //   - conversationOptions: Additional conversation options for the OpenAI API calls.
 //
 // Returns:
@@ -104,10 +141,49 @@ func CreateCompletionNode(
 func CreateConversationNode(
 	name, model string,
 	client *openai.Client,
-	conversationNodeFn ConversationNodeFn,
 	conversationOptions ...a.ModelOption,
 ) (g.Node[a.Conversation], error) {
-	openAIFn := conversationNodeFn(client.Chat, model, conversationOptions...)
+	return CreateConversationNodeWithFnOverride(
+		name,
+		model,
+		client,
+		conversationNodeFn,
+		conversationOptions...,
+	)
+}
+
+// CreateConversationNodeWithFnOverride creates a graph node for an OpenAI-based chat agent
+// with a custom conversation function.
+//
+// Parameters:
+//   - name: The unique name for the node.
+//   - model: The OpenAI model to be used for the chat agent.
+//   - client: The OpenAI client instance.
+//   - conversationFn: A custom conversation node function.
+//   - conversationOptions: Additional conversation options for the OpenAI API calls.
+//
+// Returns:
+//   - An instance of g.Node[a.Conversation] configured for the OpenAI chat agent.
+//   - An error if the node creation fails.
+//
+// Example usage:
+//
+//	node, err := CreateConversationNodeWithFnOverride("ChatNode",  "your-api-key", "gpt-4", myCustomConversationFn)
+func CreateConversationNodeWithFnOverride(
+	name, model string,
+	client *openai.Client,
+	conversationFn ConversationNodeFn,
+	conversationOptions ...a.ModelOption,
+) (g.Node[a.Conversation], error) {
+	useConversationOptions := &a.ModelOptions{}
+	for _, opt := range conversationOptions {
+		if err := opt.ApplyToConversation(useConversationOptions); err != nil {
+			return nil, fmt.Errorf("cannot create a conversation node: %w", err)
+		}
+	}
+	useConversationOptions.Model = model
+
+	openAIFn := conversationFn(client.Chat, *useConversationOptions)
 
 	routingPolicy, err := b.CreateConditionalRoutePolicy(a.ToolProcessorRoutingFn)
 	if err != nil {

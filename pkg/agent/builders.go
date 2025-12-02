@@ -19,39 +19,6 @@ func CreateCompletion(text string) Completion {
 	return Completion{Text: text}
 }
 
-// CreateCompletionOptions creates a CompletionOptions instance by applying the provided options.
-//
-// Parameters:
-//   - prompt: The prompt for the completion.
-//   - model: The model to use for the completion.
-//   - completionOptions: A variadic list of ModelOption to apply.
-//
-// Returns:
-//   - An instance of ModelOptions with the applied options.
-//   - An error if any option application fails.
-//
-// Example usage:
-//
-//	options, err := CreateCompletionOptions("Hello, world!", "gpt-4", WithMaxTokens(100))
-func CreateCompletionOptions(
-	model, prompt string,
-	completionOptions ...ModelOption,
-) (*ModelOptions, error) {
-	useOptions := ModelOptions{
-		Prompt: prompt,
-		Model:  model,
-	}
-	for _, opt := range completionOptions {
-		if err := opt.ApplyToCompletion(&useOptions); err != nil {
-			return &ModelOptions{}, err
-		}
-	}
-	useOptions.SummarizationConfig = &SummarizationConfig{
-		Enabled: false,
-	}
-	return &useOptions, nil
-}
-
 // CreateMessage is a helper function to create a Message instance.
 //
 // Parameters:
@@ -88,43 +55,4 @@ func CreateMessage(role MessageRole, content string) Message {
 //	)
 func CreateConversation(messages ...Message) Conversation {
 	return Conversation{Messages: messages}
-}
-
-// CreateConversationOptions creates a ConversationOptions instance by applying the provided options.
-//
-// Parameters:
-//   - promptModel: The model to use for the conversation.
-//   - messages: A slice of Message instances that make up the conversation history.
-//   - modelOptions: A variadic list of ModelOption to apply.
-//
-// Returns:
-//   - An instance of ModelOptions with the applied options.
-//   - An error if any option application fails.
-//
-// Example usage:
-//
-//	options, err := CreateConversationOptions(
-//	    "gpt-4-chat",
-//	    []Message{
-//	        CreateMessage(System, "You are a helpful assistant."),
-//	        CreateMessage(User, "Tell me a joke."),
-//	    },
-//	    WithTemperature(0.7),
-//	)
-func CreateConversationOptions(
-	promptModel string,
-	messages []Message,
-	modelOptions ...ModelOption,
-) (*ModelOptions, error) {
-	useOptions := ModelOptions{
-		Model:    promptModel,
-		Messages: messages,
-	}
-	for _, opt := range modelOptions {
-		if err := opt.ApplyToConversation(&useOptions); err != nil {
-			return &ModelOptions{}, err
-		}
-	}
-	useOptions.SummarizationConfig = FillSummarizationConfigWithDefaults(useOptions.SummarizationConfig)
-	return &useOptions, nil
 }
