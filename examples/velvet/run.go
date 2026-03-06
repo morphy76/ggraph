@@ -377,6 +377,9 @@ func main() {
 			a.CreateMessage(a.User, fmt.Sprintf("Question:\n%s\n\nAnswer:\n%s", currentState.Messages[mexCount-2].Content, currentState.Messages[mexCount-1].Content)),
 		), nil
 	})
+	if err != nil {
+		log.Fatalf("Failed to create answer node: %v", err)
+	}
 
 	evaluatorNode, err := o.CreateConversationNode(
 		"EvaluatorNode",
