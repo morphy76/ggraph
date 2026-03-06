@@ -41,12 +41,15 @@ var completionNodeFn CompletionNodeFn = func(completionService openai.Completion
 
 var conversationNodeFn ConversationNodeFn = func(chatService openai.ChatService, conversationOptions a.ModelOptions) g.NodeFn[a.Conversation] {
 	return func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) (a.Conversation, error) {
-		useMessages := []a.Message{}
-		if len(currentState.Messages) > 0 {
-			useMessages = currentState.Messages
-		} else {
-			useMessages = append(useMessages, userInput.Messages...)
+		if len(currentState.Messages) == 0 && len(userInput.Messages) > 0 {
+			currentState.Messages = append(currentState.Messages, userInput.Messages...)
 		}
+
+		if err := currentState.Summarize(conversationOptions.SummarizationConfig); err != nil {
+			return currentState, fmt.Errorf("failed to summarize conversation: %w", err)
+		}
+
+		useMessages := currentState.Messages
 
 		filteredMessages := []a.Message{}
 		for _, msg := range useMessages {
