@@ -1,5 +1,6 @@
 # ggraph Runtime Analysis - November 2025
 
+**Last Updated:** November 30, 2025  
 **Focus:** Best Go practices, Runtime issues/leaks, Gaps vs LangGraph
 
 ---
@@ -42,15 +43,15 @@ The runtime demonstrates **strong Go engineering** with comprehensive features a
 **Previous Issues (Now Fixed):**
 ```go
 // ALL OF THESE ARE NOW CONFIGURABLE:
-// ✅ Line 52 - runtime.go: pendingPersist queue size (10)
-// ✅ Line 40 - runtime.go: outcomeCh queue size (1000)
-// ✅ Line 18 - node.go: mailbox size (10)
-// ✅ Line 59 - node.go: node accept timeout (5s)
-// ✅ Line 112 - runtime.go: thread TTL (1 hour)
-// ✅ Line 247 - runtime.go: persist timeout (5s)
-// ✅ Line 160 - runtime.go: shutdown timeout (10s)
-// ✅ Line 372 - runtime.go: monitor send timeout (100ms)
-// ✅ Line 438 - runtime.go: eviction interval (10 minutes)
+// ✅ Line 71 - runtime.go: pendingPersist queue size (10)
+// ✅ Line 46 - runtime.go: outcomeCh queue size (100)
+// ✅ Line 40 - node.go: mailbox size (10)
+// ✅ Line 80 - node.go: node accept timeout (5s)
+// ✅ Line 142 - runtime.go: thread TTL (1 hour)
+// ✅ Line 259 - runtime.go: persist timeout (5s)
+// ✅ Line 176 - runtime.go: shutdown timeout (10s)
+// ✅ Line 388 - runtime.go: monitor send timeout (100ms)
+// ✅ Line 477 - runtime.go: eviction interval (5 minutes)
 ```
 
 **Current Implementation:**
@@ -59,13 +60,14 @@ All values are now configurable through two settings structs:
 
 1. **RuntimeSettings** - Controls runtime-level configuration:
    - `PersistenceJobsQueueSize` (default: 10)
-   - `OutcomeNotificationQueueSize` (default: 1000)
+   - `OutcomeNotificationQueueSize` (default: 100)
    - `ThreadTTL` (default: 1 hour)
    - `PersistenceJobTimeout` (default: 5 seconds)
    - `GracefulShutdownTimeout` (default: 10 seconds)
    - `OutcomeNotificationMaxInterval` (default: 100ms)
-   - `ThreadEvictorInterval` (default: 10 minutes)
-   - Worker pool defaults
+   - `ThreadEvictorInterval` (default: 5 minutes)
+   - `DefaultWorkerCount` (default: 5)
+   - `DefaultWorkerQueueSize` (default: 100)
 
 2. **NodeSettings** - Controls node-level configuration:
    - `MailboxSize` (default: 10)
@@ -158,8 +160,8 @@ node, err := builders.CreateNode(
 **Verification:** ✅ Confirmed in:
 - `/home/rp/workspace/go/ggraph/pkg/graph/runtime_settings.go`
 - `/home/rp/workspace/go/ggraph/pkg/graph/node_settings.go`
-- `/home/rp/workspace/go/ggraph/internal/graph/runtime.go` (lines 39, 46, 70, 138, 159, 246, 371, 437)
-- `/home/rp/workspace/go/ggraph/internal/graph/node.go` (lines 29, 49, 85)
+- `/home/rp/workspace/go/ggraph/internal/graph/runtime.go` (lines 39, 46, 71, 142, 176, 259, 388, 477)
+- `/home/rp/workspace/go/ggraph/internal/graph/node.go` (lines 29, 40, 80)
 
 **Priority:** ✅ **COMPLETED** - Issue fully resolved
 
@@ -276,10 +278,18 @@ type workerPool struct {
     wg        sync.WaitGroup
 }
 
-func newWorkerPool(workers int, queueSize int, coreMultiplier int) *workerPool {
+func newWorkerPool(workers, queueSize, defaultWorkers, defaultQueueSize int) *workerPool {
     // Smart defaults:
-    // - workers: runtime.NumCPU() * coreMultiplier (default 10)
-    // - queueSize: 100 (default)
+    // - workers: 5 (default, configurable via RuntimeSettings.DefaultWorkerCount)
+    // - queueSize: 100 (default, configurable via RuntimeSettings.DefaultWorkerQueueSize)
+    useQueueSize := queueSize
+    if useQueueSize <= 0 {
+        useQueueSize = defaultQueueSize
+    }
+    useWorkers := workers
+    if useWorkers <= 0 {
+        useWorkers = defaultWorkers
+    }
     pool := &workerPool{
         workers:   useWorkers,
         taskQueue: make(chan func(), useQueueSize),
@@ -293,16 +303,16 @@ func newWorkerPool(workers int, queueSize int, coreMultiplier int) *workerPool {
 ```go
 // pkg/graph/runtime_options.go
 type RuntimeOptions[T SharedState] struct {
-    WorkerCount               int  // Number of worker goroutines
-    WorkerCountCoreMultiplier int  // Multiplier for NumCPU()
-    WorkerQueueSize           int  // Task queue buffer size
+    WorkerCount     int  // Number of worker goroutines (0 = use default)
+    WorkerQueueSize int  // Task queue buffer size (0 = use default)
+    Settings        RuntimeSettings  // Default worker counts in Settings
 }
 
 // Usage:
 runtime, err := builders.CreateRuntime(
     startEdge,
     stateMonitorCh,
-    graph.WithWorkerPool(16, 200, 0),  // 16 workers, 200 queue size
+    graph.WithWorkerPool(16, 200),  // 16 workers, 200 queue size
 )
 ```
 
@@ -312,7 +322,7 @@ runtime, err := builders.CreateRuntime(
 3. ✅ **Backpressure** - Queue provides natural flow control
 4. ✅ **Graceful shutdown** - Worker pool shutdown integrated with runtime
 5. ✅ **Configurable** - Users can tune workers and queue size
-6. ✅ **Smart defaults** - Based on NumCPU() for optimal performance
+6. ✅ **Conservative defaults** - 5 workers by default, suitable for most use cases
 
 **Test Coverage:**
 - ✅ 100% code coverage on `node_worker.go`
@@ -395,10 +405,10 @@ func (r *runtimeImpl[T]) replace(threadID string, stateChange T, reducer g.Reduc
 - ✅ Cleaner separation - each map manages its own synchronization
 
 **Verification:** ✅ Confirmed in `/home/rp/workspace/go/ggraph/internal/graph/runtime.go`
-- Lines 117-129: All per-thread data uses `sync.Map`
-- Line 207: `CurrentState()` uses lock-free `LoadOrStore`
-- Line 387: `replace()` uses atomic `Swap`
-- Line 534: `clearThread()` safely deletes from all maps
+- Lines 119-127: All per-thread data uses `sync.Map`
+- Line 210: `CurrentState()` uses lock-free `LoadOrStore`
+- Line 396: `replace()` uses atomic `Swap`
+- Line 547: `clearThread()` safely deletes from all maps
 
 **Priority:** ✅ **COMPLETED** - Critical performance improvement for high-concurrency scenarios
 
@@ -563,7 +573,7 @@ func (r *runtimeImpl[T]) clearThread(threadID string) {
 4. ✅ **No memory leaks** - `sync.Map` properly cleans up internal structures
 5. ✅ **Simple and correct** - Straightforward deletion with no edge cases
 
-**Verification:** ✅ Confirmed in `/home/rp/workspace/go/ggraph/internal/graph/runtime.go:534-538`
+**Verification:** ✅ Confirmed in `/home/rp/workspace/go/ggraph/internal/graph/runtime.go:547-551`
 
 **Priority:** ✅ **COMPLETED** - Clean implementation with no semantic issues
 
@@ -610,12 +620,9 @@ func (r *runtimeImpl[T]) replace(threadID string, stateChange T, reducer g.Reduc
 5. ✅ **Better composability** - Methods can freely call each other
 
 **Verification:** ✅ Confirmed in `/home/rp/workspace/go/ggraph/internal/graph/runtime.go`
-- Line 207: `CurrentState()` is completely lock-free
-- Line 387: `replace()` uses same lock-free primitives
+- Line 210: `CurrentState()` is completely lock-free
+- Line 396: `replace()` uses same lock-free primitives
 
-**Priority:** ✅ **COMPLETED** - Eliminated entire class of deadlock bugs
-
-```go
 **Priority:** ✅ **COMPLETED** - Eliminated entire class of deadlock bugs
 
 ---
@@ -627,10 +634,10 @@ func (r *runtimeImpl[T]) replace(threadID string, stateChange T, reducer g.Reduc
 **Issue:**
 ```go
 type runtimeImpl[T g.SharedState] struct {
-    state        sync.Map // map[string]T
-    executing    sync.Map // map[string]*atomic.Bool
+    state         sync.Map // map[string]T
+    executing     sync.Map // map[string]*atomic.Bool
     lastPersisted sync.Map // map[string]T
-    threadTTL    sync.Map // map[string]time.Time
+    threadTTL     sync.Map // map[string]time.Time
 }
 ```
 
@@ -642,21 +649,11 @@ Each thread creates entries in 4 different sync.Maps. While `sync.Map` is more e
 - ✅ `sync.Map` is more memory-efficient than regular maps with locks
 - ✅ Better handling of high churn scenarios
 - 🟡 Still doesn't release memory back to OS after deletions
-    stateChangeLock map[string]*sync.RWMutex
-    executing       map[string]*atomic.Bool
-    lastPersisted   map[string]T
-    threadTTL       map[string]time.Time
-}
-```
-
-Each thread creates entries in 5 different maps. Even after eviction via `clearThread()`, Go's map doesn't shrink, only the entries are deleted.
-
-**Impact:** For systems with many short-lived threads (e.g., 1M threads over time), maps grow but never shrink.
 
 **Measurement:**
 ```
-1M threads × 5 maps × ~48 bytes (map entry overhead) = 240MB minimum
-Plus actual data (state, locks, etc.) = potentially 500MB - 1GB+
+1M threads × 4 maps × ~48 bytes (map entry overhead) ≈ 192MB minimum
+Plus actual data (state, atomic.Bool, etc.) = potentially 400MB - 800MB+
 ```
 
 **Mitigation via sync.Map:**

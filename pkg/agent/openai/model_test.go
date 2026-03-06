@@ -9,7 +9,7 @@ import (
 )
 
 func TestConvertCompletionOptions_Basic(t *testing.T) {
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model:  "gpt-3.5-turbo",
 		Prompt: "Hello, world!",
 	}
@@ -32,7 +32,7 @@ func TestConvertCompletionOptions_AllFields(t *testing.T) {
 	user := "user123"
 	seed := int64(42)
 
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model:            "gpt-3.5-turbo",
 		Prompt:           "Test prompt",
 		BestOf:           &bestOf,
@@ -54,7 +54,7 @@ func TestConvertCompletionOptions_AllFields(t *testing.T) {
 }
 
 func TestConvertCompletionOptions_OnlyRequired(t *testing.T) {
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model:  "text-davinci-003",
 		Prompt: "Simple prompt",
 	}
@@ -68,7 +68,7 @@ func TestConvertCompletionOptions_PartialOptions(t *testing.T) {
 	temp := 0.8
 	maxTokens := int64(150)
 
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model:       "gpt-3.5-turbo",
 		Prompt:      "Partial options",
 		Temperature: &temp,
@@ -81,7 +81,7 @@ func TestConvertCompletionOptions_PartialOptions(t *testing.T) {
 }
 
 func TestConvertConversationOptions_BasicConversation(t *testing.T) {
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.System, Content: "You are a helpful assistant."},
@@ -98,7 +98,7 @@ func TestConvertConversationOptions_BasicConversation(t *testing.T) {
 }
 
 func TestConversationOptions_AllMessageRoles(t *testing.T) {
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.System, Content: "System message"},
@@ -119,7 +119,7 @@ func TestConvertConversationOptions_WithTools(t *testing.T) {
 		{Name: "location", Type: "string"},
 	})
 
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "What's the weather?"},
@@ -150,7 +150,7 @@ func TestConvertConversationOptions_AllOptionalFields(t *testing.T) {
 	maxCompTokens := int64(150)
 	seed := int64(12345)
 
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "Test"},
@@ -182,7 +182,7 @@ func TestConvertConversationOptions_MultipleTools(t *testing.T) {
 		{Name: "arg2", Type: "int"},
 	})
 
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "Help me"},
@@ -198,7 +198,7 @@ func TestConvertConversationOptions_MultipleTools(t *testing.T) {
 }
 
 func TestConvertConversationOptions_EmptyMessages(t *testing.T) {
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model:    "gpt-4",
 		Messages: []a.Message{},
 	}
@@ -213,7 +213,7 @@ func TestConvertConversationOptions_EmptyMessages(t *testing.T) {
 func TestConvertConversationOptions_LogprobsZero(t *testing.T) {
 	logprobs := int64(0)
 
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "Test"},
@@ -233,7 +233,7 @@ func TestConvertToSupportedJSONType_StringType(t *testing.T) {
 		{Name: "arg1", Type: "string"},
 	})
 
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "test"},
@@ -274,7 +274,7 @@ func TestConvertToSupportedJSONType_IntegerTypes(t *testing.T) {
 		{Name: "uint64", Type: "uint64"},
 	})
 
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "test"},
@@ -297,7 +297,7 @@ func TestConvertToSupportedJSONType_FloatTypes(t *testing.T) {
 		{Name: "float64", Type: "float64"},
 	})
 
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "test"},
@@ -317,7 +317,7 @@ func TestConvertToSupportedJSONType_BooleanType(t *testing.T) {
 		{Name: "bool", Type: "bool"},
 	})
 
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "test"},
@@ -339,7 +339,7 @@ func TestConvertToSupportedJSONType_ArrayTypes(t *testing.T) {
 		{Name: "boolArr", Type: "[]bool"},
 	})
 
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "test"},
@@ -361,7 +361,7 @@ func TestConvertToSupportedJSONType_ObjectType(t *testing.T) {
 		{Name: "obj", Type: "map[string]interface{}"},
 	})
 
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "test"},
@@ -381,7 +381,7 @@ func TestConvertToSupportedJSONType_UnknownTypeDefaultsToString(t *testing.T) {
 		{Name: "custom", Type: "CustomStruct"},
 	})
 
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "test"},
@@ -406,7 +406,7 @@ func TestConvertToSupportedJSONType_MixedTypes(t *testing.T) {
 		{Name: "metadata", Type: "map[string]interface{}"},
 	})
 
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "test"},
@@ -426,7 +426,7 @@ func TestConvertToSupportedJSONType_MixedTypes(t *testing.T) {
 }
 
 func TestConversationMessagesRoles_System(t *testing.T) {
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.System, Content: "Test content"},
@@ -441,7 +441,7 @@ func TestConversationMessagesRoles_System(t *testing.T) {
 }
 
 func TestConversationMessagesRoles_User(t *testing.T) {
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "Test content"},
@@ -456,7 +456,7 @@ func TestConversationMessagesRoles_User(t *testing.T) {
 }
 
 func TestConversationMessagesRoles_Assistant(t *testing.T) {
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.Assistant, Content: "Test content"},
@@ -471,7 +471,7 @@ func TestConversationMessagesRoles_Assistant(t *testing.T) {
 }
 
 func TestToolsWithEmptyToolsArray(t *testing.T) {
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "Test"},
@@ -488,7 +488,7 @@ func TestToolsWithEmptyToolsArray(t *testing.T) {
 }
 
 func TestToolsWithNilTools(t *testing.T) {
-	opts := &a.ModelOptions{
+	opts := a.ModelOptions{
 		Model: "gpt-4",
 		Messages: []a.Message{
 			{Role: a.User, Content: "Test"},

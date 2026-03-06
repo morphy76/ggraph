@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -15,47 +14,6 @@ import (
 	b "github.com/morphy76/ggraph/pkg/builders"
 	g "github.com/morphy76/ggraph/pkg/graph"
 )
-
-// CompletionNodeFn creates a completion node that generates text based on a prompt using chat completions
-var CompletionNodeFn o.CompletionNodeFn = func(completionService openai.CompletionService, model string, completionOptions ...a.ModelOption) g.NodeFn[a.Completion] {
-	return func(userInput, currentState a.Completion, notify g.NotifyPartialFn[a.Completion]) (a.Completion, error) {
-		// Check if there's a user prompt in the conversation, or use a default
-		prompt := "Use the family guy style: answer in the same way Peter Griffin would. The request is within boundaries defined by !!![ and ]!!!. Do not put boundaries in the final answer. Requested completion is:\n!!![\n%s\n]!!!"
-
-		useOpts, err := a.CreateCompletionOptions(model, fmt.Sprintf(prompt, userInput.Text), completionOptions...)
-		if err != nil {
-			return currentState, fmt.Errorf("failed to create completion options: %w", err)
-		}
-
-		openAIOpts := o.ConvertCompletionOptions(useOpts)
-		resp, err := completionService.New(context.Background(), openAIOpts)
-		if err != nil {
-			return currentState, fmt.Errorf("failed to generate completion: %w", err)
-		}
-
-		// Print troubleshooting info for the response
-		fmt.Printf("=== Response Debug Info ===\n")
-		fmt.Printf("Response ID: %s\n", resp.ID)
-		fmt.Printf("Model: %s\n", resp.Model)
-		fmt.Printf("Object: %s\n", resp.Object)
-		fmt.Printf("Created: %d\n", resp.Created)
-		fmt.Printf("Number of choices: %d\n", len(resp.Choices))
-		if len(resp.Choices) > 0 {
-			fmt.Printf("First choice text length: %d chars\n", len(resp.Choices[0].Text))
-			fmt.Printf("First choice finish reason: %s\n", resp.Choices[0].FinishReason)
-		}
-		fmt.Printf("===========================\n")
-
-		// Update the current state with the final completion
-		if len(resp.Choices) > 0 {
-			currentState = a.CreateCompletion(resp.Choices[0].Text)
-		} else {
-			return currentState, fmt.Errorf("no completion choices returned")
-		}
-
-		return currentState, nil
-	}
-}
 
 func main() {
 	fmt.Println("=== Completion Agent Example ===")
@@ -74,7 +32,7 @@ func main() {
 		"CompletionNode",
 		openai.ChatModelGPT4_1Nano,
 		client,
-		CompletionNodeFn,
+		a.WithPromptFormat("Use the family guy style: answer in the same way Peter Griffin would. The request is within boundaries defined by !!![ and ]!!!. Do not put boundaries in the final answer. Requested completion is:\n!!![\n%s\n]!!!"),
 		a.WithTemperature(0.7),
 		a.WithFrequencyPenalty(0.5),
 	)
@@ -110,7 +68,6 @@ func main() {
 
 	fmt.Println("Completion Agent is ready!")
 	fmt.Println("Enter your text prompts for completion. Type 'quit', 'exit', or 'q' to stop.")
-	fmt.Println("Press Enter without text to use the default prompt.")
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 	promptCount := 0

@@ -28,7 +28,6 @@ func APIKeyFromEnv() string {
 //
 // Parameters:
 //   - completionService: The OpenAI CompletionService client.
-//   - model: The OpenAI model to be used for the chat agent.
 //   - modelOptions: Additional request options for the OpenAI API calls.
 //
 // Returns:
@@ -36,18 +35,17 @@ func APIKeyFromEnv() string {
 //
 // Example usage:
 //
-//	var chatNodeFn CompletionNodeFn = func(client openai.Client, model string, modelOptions ...a.ModelOption) g.CompletionNodeFn[a.Completion] {
+//	var chatNodeFn CompletionNodeFn = func(client openai.Client, modelOptions a.ModelOptions) g.CompletionNodeFn[a.Completion] {
 //	    return func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) g.CompletionNodeFn[a.Completion] {
 //	        // Implementation here...
 //	    }
 //	}
-type CompletionNodeFn func(completionService openai.CompletionService, model string, modelOptions ...a.ModelOption) g.NodeFn[a.Completion]
+type CompletionNodeFn func(completionService openai.CompletionService, modelOptions a.ModelOptions) g.NodeFn[a.Completion]
 
 // ConversationNodeFn defines a function type that creates a node function for an OpenAI-based chat agent.
 //
 // Parameters:
 //   - chatService: The OpenAI ChatService client.
-//   - model: The OpenAI model to be used for the chat agent.
 //   - modelOptions: Additional request options for the OpenAI API calls.
 //
 // Returns:
@@ -55,9 +53,9 @@ type CompletionNodeFn func(completionService openai.CompletionService, model str
 //
 // Example usage:
 //
-//	var chatNodeFn ConversationNodeFn = func(chatService openai.ChatService, model string, modelOptions ...a.ModelOption) g.NodeFn[a.Conversation] {
+//	var chatNodeFn ConversationNodeFn = func(chatService openai.ChatService, modelOptions a.ModelOptions) g.NodeFn[a.Conversation] {
 //	    return func(userInput, currentState a.Conversation, notify g.NotifyPartialFn[a.Conversation]) g.NodeFn[a.Conversation] {
 //	        // Implementation here...
 //	    }
 //	}
-type ConversationNodeFn func(chatService openai.ChatService, model string, modelOptions ...a.ModelOption) g.NodeFn[a.Conversation]
+type ConversationNodeFn func(chatService openai.ChatService, modelOptions a.ModelOptions) g.NodeFn[a.Conversation]
