@@ -4,7 +4,7 @@ go 1.25.2
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/openai/openai-go/v3 v3.10.0
+	github.com/openai/openai-go/v3 v3.12.0
 )
 
 require (
